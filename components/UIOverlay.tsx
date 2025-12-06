@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from "react";
 import { ElementData, TrackingData, CatalystType, GameState } from "../types";
+import { ELEMENTS } from "../constants";
 
 interface UIOverlayProps {
   leftElement: ElementData;
@@ -8,7 +9,8 @@ interface UIOverlayProps {
   message: string;
   trackingRef: React.MutableRefObject<TrackingData>;
   activeCatalyst: CatalystType;
-  labSlots: ElementData[];
+  labSlots: ElementData[]; // Dashboard slots (8 manually selected)
+  labCreatedSlots: ElementData[]; // Lab-created slots (8 auto-discovered)
   isDashboardOpen: boolean;
   onToggleDashboard: () => void;
   savedElements: ElementData[];
@@ -87,6 +89,21 @@ const FlaskIcon = () => (
   </svg>
 );
 
+const DashboardIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    className="w-8 h-8"
+    stroke="currentColor"
+    strokeWidth="1.5"
+  >
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+  </svg>
+);
+
 const DeathScreen: React.FC<{ reason: string }> = ({ reason }) => {
     useEffect(() => {
         const t = setTimeout(() => {
@@ -119,28 +136,6 @@ const DeathScreen: React.FC<{ reason: string }> = ({ reason }) => {
     );
 };
 
-const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combinedElement, message, trackingRef, activeCatalyst, savedElements, gameState, deathReason }) => {
-  
-  if (gameState === 'dead') {
-      return <DeathScreen reason={deathReason || "Unknown Cause"} />;
-  }
-
-  const displayElements = [...savedElements, ...ELEMENTS.filter(e => !savedElements.find(s => s.symbol === e.symbol))];
-const DashboardIcon = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    className="w-8 h-8"
-    stroke="currentColor"
-    strokeWidth="1.5"
-  >
-    <rect x="3" y="3" width="7" height="7" rx="1" />
-    <rect x="14" y="3" width="7" height="7" rx="1" />
-    <rect x="14" y="14" width="7" height="7" rx="1" />
-    <rect x="3" y="14" width="7" height="7" rx="1" />
-  </svg>
-);
-
 const UIOverlay: React.FC<UIOverlayProps> = ({
   leftElement,
   rightElement,
@@ -149,12 +144,45 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
   trackingRef,
   activeCatalyst,
   labSlots,
+  labCreatedSlots,
   isDashboardOpen,
   onToggleDashboard,
+  savedElements,
+  gameState,
+  deathReason,
 }) => {
-  // Use lab slots for the shelf (max 14 elements)
-  const displayElements = labSlots;
+  if (gameState === 'dead') {
+      return <DeathScreen reason={deathReason || "Unknown Cause"} />;
+  }
 
+  // Combine dashboard slots and lab-created slots for display (max 12 total: 8 dashboard + 4 lab-created)
+  const displayElements = [...labSlots, ...labCreatedSlots];
+
+  // Helper for font scaling
+  const getSymbolScaleClass = (symbol: string, context: 'shelf' | 'system' | 'center') => {
+      const len = symbol.length;
+      
+      if (context === 'shelf') {
+          if (len > 4) return "text-sm";
+          if (len > 2) return "text-lg";
+          return "text-2xl";
+      }
+      
+      if (context === 'system') {
+          if (len > 4) return "text-4xl";
+          if (len > 2) return "text-5xl";
+          return "text-6xl";
+      }
+      
+      if (context === 'center') {
+           if (len > 4) return "text-5xl md:text-7xl";
+           return "text-7xl md:text-9xl";
+      }
+      
+      return "";
+  };
+
+  // Animation Loop for UI Updates (No React Render Lag)
   useEffect(() => {
     // Skip all gesture effects when dashboard is open
     if (isDashboardOpen) return;
@@ -178,6 +206,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
       const screenAspect = screenW / screenH;
       const videoAspect = data.cameraAspect;
 
+      // Coordinate Remapping Logic
       const getScreenCoords = (nx: number, ny: number) => {
         let x, y;
         if (screenAspect > videoAspect) {
@@ -194,104 +223,76 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
         return { x, y };
       };
 
+      // 0. Update Cursors (Using Index Position)
       if (cursorLeft) {
-          if (data.left.isPresent) {
-              const l = getScreenCoords(data.left.indexPosition.x, data.left.indexPosition.y);
-              cursorLeft.style.transform = `translate(${l.x}px, ${l.y}px)`;
-              cursorLeft.style.opacity = '1';
-              if (data.left.isPinching) {
-                  cursorLeft.classList.add('scale-75', 'bg-cyan-500/50', 'border-white');
-                  cursorLeft.classList.remove('scale-100', 'bg-cyan-500/20', 'border-cyan-400');
-              } else {
-                  cursorLeft.classList.add('scale-100', 'bg-cyan-500/20', 'border-cyan-400');
-                  cursorLeft.classList.remove('scale-75', 'bg-cyan-500/50', 'border-white');
-              }
-          } else {
-            cursorLeft.classList.add("scale-100", "bg-cyan-500/20");
-            cursorLeft.classList.remove("scale-75", "bg-cyan-500/50");
-          }
+        if (data.left.isPresent) {
+            const l = getScreenCoords(data.left.indexPosition.x, data.left.indexPosition.y);
+            cursorLeft.style.transform = `translate(${l.x}px, ${l.y}px)`;
+            cursorLeft.style.opacity = '1';
+            if (data.left.isPinching) {
+                cursorLeft.classList.add('scale-75', 'bg-cyan-500/50', 'border-white');
+                cursorLeft.classList.remove('scale-100', 'bg-cyan-500/20', 'border-cyan-400');
+            } else {
+                cursorLeft.classList.add('scale-100', 'bg-cyan-500/20', 'border-cyan-400');
+                cursorLeft.classList.remove('scale-75', 'bg-cyan-500/50', 'border-white');
+            }
         } else {
           cursorLeft.style.opacity = "0";
         }
       }
 
       if (cursorRight) {
-          if (data.right.isPresent) {
-              const r = getScreenCoords(data.right.indexPosition.x, data.right.indexPosition.y);
-              cursorRight.style.transform = `translate(${r.x}px, ${r.y}px)`;
-              cursorRight.style.opacity = '1';
-              if (data.right.isPinching) {
-                  cursorRight.classList.add('scale-75', 'bg-purple-500/50', 'border-white');
-                  cursorRight.classList.remove('scale-100', 'bg-purple-500/20', 'border-purple-500');
-              } else {
-                  cursorRight.classList.add('scale-100', 'bg-purple-500/20', 'border-purple-500');
-                  cursorRight.classList.remove('scale-75', 'bg-purple-500/50', 'border-white');
-              }
-          } else {
-            cursorRight.classList.add("scale-100", "bg-purple-500/20");
-            cursorRight.classList.remove("scale-75", "bg-purple-500/50");
-          }
+        if (data.right.isPresent) {
+            const r = getScreenCoords(data.right.indexPosition.x, data.right.indexPosition.y);
+            cursorRight.style.transform = `translate(${r.x}px, ${r.y}px)`;
+            cursorRight.style.opacity = '1';
+            if (data.right.isPinching) {
+                cursorRight.classList.add('scale-75', 'bg-purple-500/50', 'border-white');
+                cursorRight.classList.remove('scale-100', 'bg-purple-500/20', 'border-purple-500');
+            } else {
+                cursorRight.classList.add('scale-100', 'bg-purple-500/20', 'border-purple-500');
+                cursorRight.classList.remove('scale-75', 'bg-purple-500/50', 'border-white');
+            }
         } else {
           cursorRight.style.opacity = "0";
         }
       }
 
-      const interactables = document.querySelectorAll('.interactable-btn');
-      interactables.forEach(item => {
-          const rect = item.getBoundingClientRect();
-          let isHovered = false;
-          if (data.left.isPresent) {
-              const l = getScreenCoords(data.left.indexPosition.x, data.left.indexPosition.y);
-              if (l.x >= rect.left && l.x <= rect.right && l.y >= rect.top && l.y <= rect.bottom) isHovered = true;
-          }
-          if (data.right.isPresent) {
-              const r = getScreenCoords(data.right.indexPosition.x, data.right.indexPosition.y);
-              if (r.x >= rect.left && r.x <= rect.right && r.y >= rect.top && r.y <= rect.bottom) isHovered = true;
-          }
+      // 1. Highlight Items (Shelf + Catalyst + Dashboard) on Hover
+      const interactables = document.querySelectorAll(".interactable-btn");
+      interactables.forEach((item) => {
+        const rect = item.getBoundingClientRect();
+        let isHovered = false;
 
-          const el = item as HTMLElement;
-          const isShelfItem = el.id.startsWith('shelf-item-');
-          const isCatalystItem = el.id.startsWith('catalyst-btn-');
-          
-          if (isHovered) {
-              el.style.transform = 'scale(1.15)';
-              el.style.zIndex = '100';
-              if (isShelfItem) {
-                  el.style.borderColor = 'rgba(0, 255, 255, 0.9)';
-                  el.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
-                  el.style.boxShadow = `0 0 20px ${el.dataset.color || '#fff'}`;
-              } else if (isCatalystItem) {
-                  el.style.borderColor = el.dataset.active === 'true' ? el.dataset.activecolor! : 'white';
-                  el.style.boxShadow = `0 0 15px ${el.dataset.active === 'true' ? el.dataset.activecolor : 'white'}`;
-                  el.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
-              }
-          } else {
-             el.style.transform = 'scale(1)';
-             el.style.zIndex = '1';
-             if (isShelfItem) {
-                 const isLeftActive = el.dataset.symbol === leftElement.symbol;
-                 const isRightActive = el.dataset.symbol === rightElement.symbol;
-                 if (isLeftActive) {
-                    el.style.borderColor = 'rgba(34, 211, 238, 1)'; // Cyan
-                    el.style.boxShadow = '0 0 10px rgba(34,211,238,0.3)';
-                 }
-                 else if (isRightActive) {
-                    el.style.borderColor = 'rgba(168, 85, 247, 1)'; // Purple
-                    el.style.boxShadow = '0 0 10px rgba(168,85,247,0.3)';
-                 }
-                 else {
-                    el.style.borderColor = 'rgba(255, 255, 255, 0.15)';
-                    el.style.boxShadow = 'none';
-                 }
-                 el.style.backgroundColor = 'rgba(10, 10, 10, 0.7)';
-             } else if (isCatalystItem) {
-                 const active = el.dataset.active === 'true';
-                 el.style.backgroundColor = active ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.6)';
-                 el.style.borderColor = active ? el.dataset.activecolor! : 'rgba(255,255,255,0.2)';
-                 el.style.boxShadow = active ? `0 0 20px ${el.dataset.activecolor}` : 'none';
-                 el.style.color = active ? el.dataset.activecolor! : '#ffffff';
-             }
-          }
+        // Check Left Hand (Index)
+        if (data.left.isPresent) {
+          const l = getScreenCoords(
+            data.left.indexPosition.x,
+            data.left.indexPosition.y
+          );
+          if (
+            l.x >= rect.left &&
+            l.x <= rect.right &&
+            l.y >= rect.top &&
+            l.y <= rect.bottom
+          )
+            isHovered = true;
+        }
+        // Check Right Hand (Index)
+        if (data.right.isPresent) {
+          const r = getScreenCoords(
+            data.right.indexPosition.x,
+            data.right.indexPosition.y
+          );
+          if (
+            r.x >= rect.left &&
+            r.x <= rect.right &&
+            r.y >= rect.top &&
+            r.y <= rect.bottom
+          )
+            isHovered = true;
+        }
+
         // Apply Hover Styles Direct to DOM
         const el = item as HTMLElement;
         const isShelfItem = el.id.startsWith("shelf-item-");
@@ -308,9 +309,10 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
             el.style.backgroundColor = "rgba(255, 255, 255, 0.2)";
             el.style.boxShadow = `0 0 20px ${el.dataset.color || "#fff"}`;
           } else if (isCatalystItem) {
-            el.style.borderColor = "white";
-            el.style.boxShadow = "0 0 15px white";
-            el.style.backgroundColor = "rgba(255, 255, 255, 0.2)";
+             const active = el.dataset.active === 'true';
+             el.style.borderColor = active ? el.dataset.activecolor! : 'white';
+             el.style.boxShadow = `0 0 15px ${active ? el.dataset.activecolor : 'white'}`;
+             el.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
           } else if (isToggle || isDashboardItem) {
             el.style.boxShadow = "0 0 15px rgba(34,211,238,0.4)";
           }
@@ -336,12 +338,12 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
             el.style.backgroundColor = "rgba(10, 10, 10, 0.7)";
           } else if (isCatalystItem) {
             const active = el.dataset.active === "true";
-            el.style.backgroundColor = "rgba(0,0,0,0.6)";
+            el.style.backgroundColor = active ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.6)';
             el.style.borderColor = active
               ? el.dataset.activecolor!
               : "rgba(255,255,255,0.2)";
             el.style.boxShadow = active
-              ? `0 0 15px ${el.dataset.activecolor}`
+              ? `0 0 20px ${el.dataset.activecolor}`
               : "none";
             el.style.color = active ? el.dataset.activecolor! : "#ffffff";
           } else if (isToggle) {
@@ -399,7 +401,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
             <div className="text-[10px] text-cyan-400 mb-2 font-mono tracking-[0.2em] border-b border-cyan-900 pb-1 inline-block">
               SYSTEM: LEFT HAND
             </div>
-            <div className="text-6xl font-['Orbitron'] font-bold text-white drop-shadow-[0_0_20px_rgba(34,211,238,0.6)]">
+            <div className={`${getSymbolScaleClass(leftElement.symbol, 'system')} font-['Orbitron'] font-bold text-white drop-shadow-[0_0_20px_rgba(34,211,238,0.6)]`}>
               {leftElement.symbol}
             </div>
             <div className="text-sm text-cyan-200/70 mt-1 font-mono">
@@ -408,8 +410,8 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
           </div>
 
           {/* CENTER: LAB SHELF */}
-          <div className="flex-1 overflow-hidden px-4 flex justify-center max-w-4xl">
-            <div className="w-full overflow-x-auto pb-4 no-scrollbar flex justify-center">
+          <div className="flex-1 overflow-visible px-4 flex justify-center max-w-4xl">
+            <div className="w-full overflow-x-visible pb-4 no-scrollbar flex justify-center">
               {displayElements.length > 0 ? (
                 <div className="flex gap-4 px-4 min-w-max justify-center items-center">
                   {displayElements.map((el) => {
@@ -435,7 +437,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
                                 `}
                       >
                         <div
-                          className="text-2xl font-bold font-['Orbitron'] drop-shadow-md"
+                          className={`${getSymbolScaleClass(el.symbol, 'shelf')} font-bold font-['Orbitron'] drop-shadow-md`}
                           style={{ color: el.color }}
                         >
                           {el.symbol}
@@ -478,7 +480,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
             <div className="text-[10px] text-purple-400 mb-2 font-mono tracking-[0.2em] border-b border-purple-900 pb-1 inline-block">
               SYSTEM: RIGHT HAND
             </div>
-            <div className="text-6xl font-['Orbitron'] font-bold text-white drop-shadow-[0_0_20px_rgba(168,85,247,0.6)]">
+            <div className={`${getSymbolScaleClass(rightElement.symbol, 'system')} font-['Orbitron'] font-bold text-white drop-shadow-[0_0_20px_rgba(168,85,247,0.6)]`}>
               {rightElement.symbol}
             </div>
             <div className="text-sm text-purple-200/70 mt-1 font-mono">
@@ -486,7 +488,6 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
             </div>
           </div>
         </div>
-        
 
         {/* --- COLLECTION BUTTON (BOTTOM LEFT) --- */}
         <div className="absolute bottom-10 left-10 pointer-events-auto z-40">
@@ -541,16 +542,19 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
               </div>
             </div>
           </div>
-          <div className="text-[9px] text-white/30 font-mono tracking-[0.3em] uppercase">Catalysts (Hover to Select / Pinch to Off)</div>
-      </div>
+          <div className="text-[9px] text-white/30 font-mono tracking-[0.3em] uppercase">
+            Catalysts (Hover to Select / Pinch to Off)
+          </div>
+        </div>
 
-      <div className="p-6 md:p-10 flex flex-col justify-end">
-         
-         {combinedElement && combinedElement.symbol !== 'BOOM' && (
+        {/* --- BOTTOM HUD --- */}
+        <div className="p-6 md:p-10 flex flex-col justify-end pointer-events-none">
+          {/* Center Message */}
+          {combinedElement && combinedElement.symbol !== 'BOOM' && (
             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center w-full pointer-events-none">
               <div className="relative">
                 <div className="absolute inset-0 bg-cyan-500 blur-[100px] opacity-20 rounded-full"></div>
-                <h2 className="relative text-7xl md:text-9xl font-['Orbitron'] font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-cyan-300 drop-shadow-[0_0_60px_rgba(0,255,255,0.8)] animate-pulse">
+                <h2 className={`relative ${getSymbolScaleClass(combinedElement.symbol, 'center')} font-['Orbitron'] font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-cyan-300 drop-shadow-[0_0_60px_rgba(0,255,255,0.8)] animate-pulse`}>
                   {combinedElement.symbol}
                 </h2>
               </div>
@@ -570,25 +574,43 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
               <div
                 className={`
                         relative z-10 px-12 py-5 font-mono tracking-widest uppercase text-sm font-bold bg-black/80 backdrop-blur-xl border-l-4 border-r-4
-                        ${message.includes("HOLD") ? 'border-yellow-500 text-yellow-400' : 
-                          message.includes("SUCCESS") || message.includes("SAVED") ? 'border-green-500 text-green-400' :
-                          message.includes("Unstable") || message.includes("Failed") || message.includes("WARNING") ? 'border-red-500 text-red-400' :
-                          'border-cyan-500 text-cyan-400'}
+                        ${
+                          message.includes("HOLD")
+                            ? "border-yellow-500 text-yellow-400"
+                            : message.includes("SUCCESS") ||
+                                message.includes("SAVED")
+                              ? "border-green-500 text-green-400"
+                              : message.includes("Unstable") ||
+                                  message.includes("Failed") ||
+                                  message.includes("WARNING")
+                                ? "border-red-500 text-red-400"
+                                : "border-cyan-500 text-cyan-400"
+                        }
                     `}
-                    style={{ clipPath: 'polygon(10% 0, 100% 0, 100% 80%, 90% 100%, 0 100%, 0 20%)' }}
-                >
-                    <span className="mr-4 opacity-50 text-xs">STATUS //</span>
-                    {message}
-                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-transparent via-white/5 to-transparent -translate-y-full animate-[scan_2s_linear_infinite]"></div>
-                </div>
+                style={{
+                  clipPath:
+                    "polygon(10% 0, 100% 0, 100% 80%, 90% 100%, 0 100%, 0 20%)",
+                }}
+              >
+                <span className="mr-4 opacity-50 text-xs">STATUS //</span>
+                {message}
+                {/* Scanning Line Animation */}
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-transparent via-white/5 to-transparent -translate-y-full animate-[scan_2s_linear_infinite]"></div>
+              </div>
             </div>
 
             {!combinedElement && (
-                <div className="mt-6 flex gap-8 justify-center text-[9px] text-white/40 font-mono uppercase tracking-[0.2em]">
-                    <span className="flex items-center gap-2"><div className="w-1 h-1 bg-cyan-400"></div>Hover Select</span>
-                    <span className="flex items-center gap-2"><div className="w-1 h-1 bg-white"></div>Clap Fuse</span>
-                    <span className="flex items-center gap-2"><div className="w-1 h-1 bg-red-500"></div>Spin Reset</span>
-                </div>
+              <div className="mt-6 flex gap-8 justify-center text-[9px] text-white/40 font-mono uppercase tracking-[0.2em]">
+                <span className="flex items-center gap-2">
+                  <div className="w-1 h-1 bg-cyan-400"></div>Hover Select
+                </span>
+                <span className="flex items-center gap-2">
+                  <div className="w-1 h-1 bg-white"></div>Clap Fuse
+                </span>
+                <span className="flex items-center gap-2">
+                  <div className="w-1 h-1 bg-red-500"></div>Spin Reset
+                </span>
+              </div>
             )}
           </div>
         </div>

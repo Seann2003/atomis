@@ -552,6 +552,86 @@ const NO2Molecule: React.FC<{ scaleRef?: React.MutableRefObject<number> }> = ({ 
     );
 };
 
+const H2CO3Molecule: React.FC<{ scaleRef?: React.MutableRefObject<number> }> = ({ scaleRef }) => {
+    const groupRef = useRef<THREE.Group>(null);
+    useFrame((state) => {
+        const t = state.clock.getElapsedTime();
+        const s = scaleRef ? (1.0 + scaleRef.current * 0.2) : 1.0;
+        if (groupRef.current) { 
+            groupRef.current.rotation.y = t * 0.5; 
+            groupRef.current.rotation.x = Math.sin(t * 0.2) * 0.1;
+            groupRef.current.scale.set(s, s, s); 
+        }
+    });
+
+    return (
+        <group ref={groupRef}>
+            {/* Carbon Center (Black/Grey) */}
+            <mesh position={[0, 0, 0]}>
+                <sphereGeometry args={[0.45, 32, 32]} />
+                <meshStandardMaterial color="#333333" roughness={0.3} />
+            </mesh>
+
+            {/* Top Oxygen (Double Bonded, Red) */}
+            <mesh position={[0, 0.8, 0]}>
+                <sphereGeometry args={[0.4, 32, 32]} />
+                <meshStandardMaterial color="#ff0000" roughness={0.3} emissive="#440000" />
+            </mesh>
+            {/* Double Bond connectors */}
+            <mesh position={[-0.12, 0.4, 0]}>
+                <cylinderGeometry args={[0.06, 0.06, 0.8, 8]} />
+                <meshStandardMaterial color="#cccccc" />
+            </mesh>
+            <mesh position={[0.12, 0.4, 0]}>
+                <cylinderGeometry args={[0.06, 0.06, 0.8, 8]} />
+                <meshStandardMaterial color="#cccccc" />
+            </mesh>
+
+            {/* Left Oxygen (Single Bonded, Red) */}
+            <mesh position={[-0.7, -0.5, 0]}>
+                <sphereGeometry args={[0.4, 32, 32]} />
+                <meshStandardMaterial color="#ff0000" roughness={0.3} emissive="#440000" />
+            </mesh>
+             {/* Left C-O Bond */}
+            <mesh position={[-0.35, -0.25, 0]} rotation={[0, 0, -2.1]}>
+                 <cylinderGeometry args={[0.08, 0.08, 0.8, 8]} />
+                 <meshStandardMaterial color="#cccccc" />
+            </mesh>
+            {/* Left Hydrogen (White) */}
+            <mesh position={[-1.1, -0.7, 0]}>
+                 <sphereGeometry args={[0.25, 32, 32]} />
+                 <meshStandardMaterial color="#ffffff" />
+            </mesh>
+             {/* Left O-H Bond */}
+            <mesh position={[-0.9, -0.6, 0]} rotation={[0, 0, -2.5]}>
+                 <cylinderGeometry args={[0.05, 0.05, 0.5, 8]} />
+                 <meshStandardMaterial color="#cccccc" />
+            </mesh>
+
+            {/* Right Oxygen (Single Bonded, Red) */}
+            <mesh position={[0.7, -0.5, 0]}>
+                <sphereGeometry args={[0.4, 32, 32]} />
+                <meshStandardMaterial color="#ff0000" roughness={0.3} emissive="#440000" />
+            </mesh>
+            {/* Right C-O Bond */}
+            <mesh position={[0.35, -0.25, 0]} rotation={[0, 0, 2.1]}>
+                 <cylinderGeometry args={[0.08, 0.08, 0.8, 8]} />
+                 <meshStandardMaterial color="#cccccc" />
+            </mesh>
+             {/* Right Hydrogen (White) */}
+             <mesh position={[1.1, -0.7, 0]}>
+                 <sphereGeometry args={[0.25, 32, 32]} />
+                 <meshStandardMaterial color="#ffffff" />
+            </mesh>
+             {/* Right O-H Bond */}
+            <mesh position={[0.9, -0.6, 0]} rotation={[0, 0, 2.5]}>
+                 <cylinderGeometry args={[0.05, 0.05, 0.5, 8]} />
+                 <meshStandardMaterial color="#cccccc" />
+            </mesh>
+        </group>
+    );
+};
+
 // --- BURST SHADERS ---
 const burstVertexShader = `
 uniform float uTime;
@@ -690,6 +770,7 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
     if (element.symbol === 'Fe2O3' && !combinedElement) return <Fe2O3Molecule scaleRef={scaleRef} />;
     if (element.symbol === 'CaCl2' && !combinedElement) return <CaCl2Molecule scaleRef={scaleRef} />;
     if (element.symbol === 'NO2' && !combinedElement) return <NO2Molecule scaleRef={scaleRef} />;
+    if (element.symbol === 'H2CO3' && !combinedElement) return <H2CO3Molecule scaleRef={scaleRef} />;
     
     return (
         <ParticleSphere 
@@ -726,6 +807,9 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
     }
     if (combinedElement.symbol === 'NO2') {
         return <NO2Molecule scaleRef={combinedPinchRef} />;
+    }
+    if (combinedElement.symbol === 'H2CO3') {
+        return <H2CO3Molecule scaleRef={combinedPinchRef} />;
     }
 
     return (

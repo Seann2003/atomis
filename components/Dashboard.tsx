@@ -9,9 +9,10 @@ interface DashboardProps {
   isOpen: boolean;
   onClose: () => void;
   savedElements: ElementData[];
+  labSlots: ElementData[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements }) => {
+const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements, labSlots }) => {
   const [allDiscoverables, setAllDiscoverables] = useState<ElementData[]>([]);
   const [selectedInfo, setSelectedInfo] = useState<ElementData | null>(null);
   const [selectedSlots, setSelectedSlots] = useState<ElementData[]>([]);
@@ -25,7 +26,8 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements })
       isPointing: false, 
       position: {x: 0.5, y: 0.5, z: 0}, 
       indexPosition: {x: 0.5, y: 0.5, z: 0},
-      isDetected: false 
+      isDetected: false,
+      isPresent: false
     },
     right: { 
       pinchDistance: 0, 
@@ -33,7 +35,8 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements })
       isPointing: false, 
       position: {x: 0.5, y: 0.5, z: 0}, 
       indexPosition: {x: 0.5, y: 0.5, z: 0},
-      isDetected: false 
+      isDetected: false,
+      isPresent: false
     },
     isClapping: false,
     isResetGesture: false,
@@ -42,18 +45,10 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements })
     cameraAspect: 1.77
   });
 
-  // Load slots from localStorage on mount
+  // Sync selectedSlots with labSlots prop (which updates when new elements are created)
   useEffect(() => {
-    const savedSlots = localStorage.getItem('labSlots');
-    if (savedSlots) {
-      try {
-        const parsed = JSON.parse(savedSlots);
-        setSelectedSlots(parsed);
-      } catch (e) {
-        console.error('Failed to parse saved slots', e);
-      }
-    }
-  }, []);
+    setSelectedSlots(labSlots);
+  }, [labSlots]); // Update whenever labSlots changes (including when new elements are created in lab)
 
   // Save slots to localStorage whenever they change
   useEffect(() => {
@@ -63,13 +58,16 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements })
   }, [selectedSlots]);
 
   useEffect(() => {
-    // 1. Get all unique combination results
-    const comboResults = COMBINATIONS.map(c => c.result);
+    // 1. Base elements (Level 1) - assign level 1 explicitly
+    const baseElements = ELEMENTS.map(el => ({ ...el, level: 1 }));
+    
+    // 2. Get all unique combination results (Level 2) - assign level 2 explicitly
+    const comboResults = COMBINATIONS.map(c => ({ ...c.result, level: 2 }));
     // Deduplicate by symbol
     const uniqueCombos = comboResults.filter((v, i, a) => a.findIndex(t => t.symbol === v.symbol) === i);
     
-    // 2. Combine basic elements + combos
-    const fullList = [...ELEMENTS, ...uniqueCombos];
+    // 3. Combine base elements + compounds
+    const fullList = [...baseElements, ...uniqueCombos];
     setAllDiscoverables(fullList);
   }, []);
 
@@ -90,11 +88,13 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements })
                 dashboardTrackingRef.current.left.position.x = centerX;
                 dashboardTrackingRef.current.left.position.y = centerY;
                 dashboardTrackingRef.current.left.isDetected = true;
+                dashboardTrackingRef.current.left.isPresent = true;
             }
         }, 50);
     } else {
         // Go back to idle look
         dashboardTrackingRef.current.left.isDetected = false;
+        dashboardTrackingRef.current.left.isPresent = false;
     }
   }, [selectedInfo, isOpen]);
 
@@ -104,15 +104,35 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements })
   ).length;
   
   const isUnlocked = (el: ElementData) => {
-    // Basic elements (Level 1) are always unlocked
-    if (el.level === 1) return true;
-    // Check if in saved history
+    // Base elements (Level 1, atomicNumber > 0) are always unlocked
+    if (el.level === 1 && el.atomicNumber > 0) return true;
+    // Compounds (Level 2+) need to be discovered/saved
     return savedElements.some(s => s.symbol === el.symbol);
   };
 
-  // Group elements by Level
+  // Group elements by Level and sort them
   const getElementsByLevel = (level: number) => {
-      return allDiscoverables.filter(el => (el.level || 1) === level);
+      // Level 1: Only base elements (from ELEMENTS array, atomicNumber > 0)
+      // Compounds (atomicNumber === 0) should NEVER appear in Level 1
+      if (level === 1) {
+          const baseElements = allDiscoverables.filter(el => 
+              el.atomicNumber > 0 && (el.level === 1 || !el.level)
+          );
+          return baseElements.sort((a, b) => a.atomicNumber - b.atomicNumber);
+      }
+      
+      // Level 2: Only compounds (from COMBINATIONS, atomicNumber === 0)
+      // Base elements (atomicNumber > 0) should NEVER appear in Level 2
+      if (level === 2) {
+          const compounds = allDiscoverables.filter(el => 
+              el.atomicNumber === 0 && (el.level === 2 || !el.level)
+          );
+          return compounds.sort((a, b) => a.symbol.localeCompare(b.symbol));
+      }
+      
+      // Level 3+: Future complex compounds
+      const filtered = allDiscoverables.filter(el => el.level === level);
+      return filtered.sort((a, b) => a.symbol.localeCompare(b.symbol));
   };
 
   // Check if element is in selected slots

@@ -113,6 +113,7 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
 
       if (result && result.landmarks) {
         let detectedFist = false;
+        const detectedHands = new Set<string>();
 
         result.handedness.forEach((h, index) => {
           const landmarks = result!.landmarks[index];
@@ -138,20 +139,32 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
 
           if (label === 'Right') { 
              handState.isDetected = true;
+             handState.isPresent = true;
              trackingData.left = handState;
+             detectedHands.add('left');
              if (leftBuffer.current.detectCircle()) {
                 trackingData.isResetGesture = true;
                 leftBuffer.current.clear();
              }
           } else {
              handState.isDetected = true;
+             handState.isPresent = true;
              trackingData.right = handState;
+             detectedHands.add('right');
              if (rightBuffer.current.detectCircle()) {
                 trackingData.isResetGesture = true;
                 rightBuffer.current.clear();
              }
           }
         });
+        
+        // Set isPresent to false for hands that are not detected
+        if (!detectedHands.has('left')) {
+          trackingData.left.isPresent = false;
+        }
+        if (!detectedHands.has('right')) {
+          trackingData.right.isPresent = false;
+        }
         
         trackingData.isClosedFist = detectedFist;
 

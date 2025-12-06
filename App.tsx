@@ -34,13 +34,15 @@ const App: React.FC = () => {
     return () => clearTimeout(t);
   }, [isCameraReady]);
 
-  const [labSlots, setLabSlots] = useState<ElementData[]>([]);
+  const [labSlots, setLabSlots] = useState<ElementData[]>([]); // Dashboard slots (8 manually selected)
+  const [labCreatedSlots, setLabCreatedSlots] = useState<ElementData[]>([]); // Lab-created slots (8 auto-discovered)
 
   // Load saved history and lab slots on mount
   useEffect(() => {
     const history = JSON.parse(localStorage.getItem('chemLabHistory') || '[]');
     setSavedElements(history);
     
+    // Load dashboard slots (manually selected)
     const savedSlots = localStorage.getItem('labSlots');
     if (savedSlots) {
       try {
@@ -55,6 +57,17 @@ const App: React.FC = () => {
         }
       } catch (e) {
         console.error('Failed to parse saved slots', e);
+      }
+    }
+    
+    // Load lab-created slots (auto-discovered in lab)
+    const savedCreatedSlots = localStorage.getItem('labCreatedSlots');
+    if (savedCreatedSlots) {
+      try {
+        const parsed = JSON.parse(savedCreatedSlots);
+        setLabCreatedSlots(parsed);
+      } catch (e) {
+        console.error('Failed to parse lab created slots', e);
       }
     }
   }, []);
@@ -85,22 +98,29 @@ const App: React.FC = () => {
           setSavedElements(newHistory);
       }
       
-      // Automatically add to lab slots if not already present and slots aren't full
-      setLabSlots(prevSlots => {
-          // Check if element is already in slots
-          if (prevSlots.find(e => e.symbol === element.symbol)) {
-              return prevSlots; // Already in slots, no change
+      // Automatically add to lab-created slots (separate from dashboard slots)
+      // Only if element is not already in dashboard slots or lab-created slots
+      setLabCreatedSlots(prevCreatedSlots => {
+          // Check if element is already in dashboard slots (read from localStorage for current state)
+          const currentDashboardSlots = JSON.parse(localStorage.getItem('labSlots') || '[]');
+          if (currentDashboardSlots.find((e: ElementData) => e.symbol === element.symbol)) {
+              return prevCreatedSlots; // Already in dashboard slots, don't add to created slots
           }
           
-          // Check if slots are full (max 8)
-          if (prevSlots.length >= 8) {
-              return prevSlots; // Slots full, can't add
+          // Check if element is already in lab-created slots
+          if (prevCreatedSlots.find(e => e.symbol === element.symbol)) {
+              return prevCreatedSlots; // Already in created slots, no change
           }
           
-          // Add to slots
-          const newSlots = [...prevSlots, element];
-          localStorage.setItem('labSlots', JSON.stringify(newSlots));
-          return newSlots;
+          // Check if lab-created slots are full (max 4)
+          if (prevCreatedSlots.length >= 4) {
+              return prevCreatedSlots; // Slots full, can't add
+          }
+          
+          // Add to lab-created slots
+          const newCreatedSlots = [...prevCreatedSlots, element];
+          localStorage.setItem('labCreatedSlots', JSON.stringify(newCreatedSlots));
+          return newCreatedSlots;
       });
   };
 
@@ -207,7 +227,12 @@ const App: React.FC = () => {
     return null;
   };
 
-  const handleInteraction = useCallback((hit: HTMLElement, hand: 'LEFT' | 'RIGHT') => {
+  const handleInteraction = useCallback((hit: HTMLElement, hand: 'LEFT' | 'RIGHT', isPinching: boolean = false) => {
+      // Only trigger on pinch/click, not just hover
+      if (!isPinching && !hit.id.startsWith('shelf-item-')) {
+          return; // For non-shelf items, require pinch to interact
+      }
+      
       // 1. Dashboard Logic
       if (hit.id === 'dashboard-toggle') {
           setIsDashboardOpen(true);
@@ -232,23 +257,27 @@ const App: React.FC = () => {
           setActiveCatalyst(prev => prev === type ? 'none' : type);
           setMessage(`${type.toUpperCase()} CATALYST ACTIVE`);
       }
-      // 3. Shelf Logic
+      // 3. Shelf Logic - Allow hover selection for shelf items
       else if (hit.id.startsWith('shelf-item-')) {
           const symbol = hit.dataset.symbol;
           
-          // Only use elements from lab slots
-          const selectedElement = labSlots.find(e => e.symbol === symbol);
+          // Check both dashboard slots and lab-created slots
+          const selectedElement = labSlots.find(e => e.symbol === symbol) 
+            || labCreatedSlots.find(e => e.symbol === symbol);
           
           if (selectedElement) {
-             lastInteractionTime.current = now;
+             lastInteractionTime.current = Date.now();
              if (hand === 'LEFT') {
                  setLeftElement(selectedElement);
+                 setMessage("ELEMENT SWAPPED (LEFT)");
              } else {
                  setRightElement(selectedElement);
+                 setMessage("ELEMENT SWAPPED (RIGHT)");
              }
+             setTimeout(() => setMessage("LAB READY"), 1000);
           }
       }
-  }, [labSlots, isDashboardOpen]);
+  }, [labSlots, labCreatedSlots, isDashboardOpen]);
 
   const onTrackingUpdate = useCallback((data: TrackingData) => {
     // Disable all gesture effects when dashboard is open
@@ -371,8 +400,12 @@ const App: React.FC = () => {
                 trackingRef={trackingDataRef}
                 activeCatalyst={activeCatalyst}
                 labSlots={labSlots}
+                labCreatedSlots={labCreatedSlots}
                 isDashboardOpen={isDashboardOpen}
                 onToggleDashboard={() => setIsDashboardOpen(!isDashboardOpen)}
+                savedElements={savedElements}
+                gameState={gameState}
+                deathReason={deathReason}
             />
             <Dashboard 
                isOpen={isDashboardOpen}
@@ -394,9 +427,15 @@ const App: React.FC = () => {
                      console.error('Failed to parse saved slots', e);
                    }
                  }
+                 
+                 // Clear lab-created slots when returning from dashboard
+                 setLabCreatedSlots([]);
+                 localStorage.removeItem('labCreatedSlots');
+                 
                  setIsDashboardOpen(false);
                }}
                savedElements={savedElements}
+               labSlots={labSlots}
             />
             <MascotGuide 
                message={message}

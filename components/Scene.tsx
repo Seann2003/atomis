@@ -127,12 +127,12 @@ const HClMolecule: React.FC<{ scaleRef?: React.MutableRefObject<number> }> = ({ 
             {/* Hydrogen (White, Small) */}
             <mesh position={[0.8, 0, 0]}>
                 <sphereGeometry args={[0.3, 32, 32]} />
-                <meshStandardMaterial color="#ffffff" roughness={0.2} metalness={0.1} />
+                <meshStandardMaterial color="#ffffff" roughness={0.2} metalness={0.1} emissive="#333333" />
             </mesh>
             {/* Chlorine (Green, Large) */}
             <mesh position={[-0.4, 0, 0]}>
                 <sphereGeometry args={[0.7, 32, 32]} />
-                <meshStandardMaterial color="#00ff00" roughness={0.3} metalness={0.2} transparent opacity={0.9} />
+                <meshStandardMaterial color="#00ff00" roughness={0.3} metalness={0.2} transparent opacity={0.9} emissive="#003300" />
             </mesh>
             {/* Bond */}
             <mesh rotation={[0, 0, Math.PI / 2]} position={[0.2, 0, 0]}>
@@ -142,6 +142,201 @@ const HClMolecule: React.FC<{ scaleRef?: React.MutableRefObject<number> }> = ({ 
         </group>
     );
 };
+
+// --- NH3 MOLECULE (Ammonia) ---
+const NH3Molecule: React.FC<{ scaleRef?: React.MutableRefObject<number> }> = ({ scaleRef }) => {
+    const groupRef = useRef<THREE.Group>(null);
+
+    useFrame((state) => {
+        const t = state.clock.getElapsedTime();
+        const s = scaleRef ? (1.0 + scaleRef.current * 0.2) : 1.0;
+        if (groupRef.current) {
+            groupRef.current.rotation.y = t * 0.2;
+            groupRef.current.rotation.x = Math.sin(t * 0.2) * 0.1;
+            groupRef.current.scale.set(s, s, s);
+        }
+    });
+
+    return (
+        <group ref={groupRef}>
+            {/* Nitrogen (Blue, Large) */}
+            <mesh position={[0, 0.2, 0]}>
+                <sphereGeometry args={[0.6, 32, 32]} />
+                <meshStandardMaterial color="#0000ff" roughness={0.3} metalness={0.1} emissive="#000044" />
+            </mesh>
+            {/* Hydrogens (White, Small) - Tripod */}
+            {[0, 120, 240].map((angle, i) => {
+                const rad = angle * (Math.PI / 180);
+                const x = Math.cos(rad) * 0.7;
+                const z = Math.sin(rad) * 0.7;
+                return (
+                    <group key={i}>
+                         <mesh position={[x, -0.4, z]}>
+                            <sphereGeometry args={[0.3, 32, 32]} />
+                            <meshStandardMaterial color="#ffffff" roughness={0.2} emissive="#444444" />
+                        </mesh>
+                         {/* Bond */}
+                        <mesh position={[x/2, -0.1, z/2]} rotation={[0.5, -rad - Math.PI/2, 0]}>
+                             <cylinderGeometry args={[0.08, 0.08, 0.8, 8]} />
+                             <meshStandardMaterial color="#cccccc" />
+                        </mesh>
+                    </group>
+                )
+            })}
+        </group>
+    );
+};
+
+// --- Fe2O3 MOLECULE (Iron Oxide) ---
+const Fe2O3Molecule: React.FC<{ scaleRef?: React.MutableRefObject<number> }> = ({ scaleRef }) => {
+    const groupRef = useRef<THREE.Group>(null);
+
+    useFrame((state) => {
+        const t = state.clock.getElapsedTime();
+        const s = scaleRef ? (1.0 + scaleRef.current * 0.2) : 1.0;
+        if (groupRef.current) {
+            groupRef.current.rotation.y = t * 0.15;
+            groupRef.current.rotation.z = Math.cos(t * 0.1) * 0.05;
+            groupRef.current.scale.set(s, s, s);
+        }
+    });
+
+    return (
+        <group ref={groupRef}>
+            {/* Iron (Orange-Red, Large) */}
+            <mesh position={[-0.6, 0, 0]}>
+                <sphereGeometry args={[0.55, 32, 32]} />
+                <meshStandardMaterial color="#d45500" roughness={0.4} metalness={0.6} emissive="#441100" />
+            </mesh>
+            <mesh position={[0.6, 0, 0]}>
+                <sphereGeometry args={[0.55, 32, 32]} />
+                <meshStandardMaterial color="#d45500" roughness={0.4} metalness={0.6} emissive="#441100" />
+            </mesh>
+
+            {/* Oxygen (Red, Medium) */}
+            <mesh position={[0, 0.6, 0]}>
+                <sphereGeometry args={[0.45, 32, 32]} />
+                <meshStandardMaterial color="#ff0000" roughness={0.3} emissive="#440000" />
+            </mesh>
+            <mesh position={[0, -0.6, 0]}>
+                <sphereGeometry args={[0.45, 32, 32]} />
+                <meshStandardMaterial color="#ff0000" roughness={0.3} emissive="#440000" />
+            </mesh>
+            <mesh position={[0, 0, 0.6]}>
+                <sphereGeometry args={[0.45, 32, 32]} />
+                <meshStandardMaterial color="#ff0000" roughness={0.3} emissive="#440000" />
+            </mesh>
+            
+            {/* Bonds */}
+             <mesh position={[-0.3, 0.3, 0]} rotation={[0, 0, -0.8]}>
+                <cylinderGeometry args={[0.08, 0.08, 0.9, 8]} />
+                <meshStandardMaterial color="#888888" />
+            </mesh>
+             <mesh position={[0.3, 0.3, 0]} rotation={[0, 0, 0.8]}>
+                <cylinderGeometry args={[0.08, 0.08, 0.9, 8]} />
+                <meshStandardMaterial color="#888888" />
+            </mesh>
+            <mesh position={[-0.3, -0.3, 0]} rotation={[0, 0, 0.8]}>
+                <cylinderGeometry args={[0.08, 0.08, 0.9, 8]} />
+                <meshStandardMaterial color="#888888" />
+            </mesh>
+             <mesh position={[0.3, -0.3, 0]} rotation={[0, 0, -0.8]}>
+                <cylinderGeometry args={[0.08, 0.08, 0.9, 8]} />
+                <meshStandardMaterial color="#888888" />
+            </mesh>
+        </group>
+    );
+};
+
+// --- CaCl2 MOLECULE (Calcium Chloride) ---
+const CaCl2Molecule: React.FC<{ scaleRef?: React.MutableRefObject<number> }> = ({ scaleRef }) => {
+    const groupRef = useRef<THREE.Group>(null);
+
+    useFrame((state) => {
+        const t = state.clock.getElapsedTime();
+        const s = scaleRef ? (1.0 + scaleRef.current * 0.2) : 1.0;
+        if (groupRef.current) {
+            groupRef.current.rotation.y = t * 0.2;
+            groupRef.current.rotation.x = t * 0.1;
+            groupRef.current.scale.set(s, s, s);
+        }
+    });
+
+    return (
+        <group ref={groupRef}>
+            {/* Calcium (Grey, Large) */}
+            <mesh position={[0, 0, 0]}>
+                <sphereGeometry args={[0.65, 32, 32]} />
+                <meshStandardMaterial color="#aaaaaa" roughness={0.3} metalness={0.4} emissive="#222222" />
+            </mesh>
+            
+            {/* Chlorines (Green, Medium) - Linear */}
+            <mesh position={[1.2, 0, 0]}>
+                <sphereGeometry args={[0.55, 32, 32]} />
+                <meshStandardMaterial color="#00ff00" roughness={0.3} transparent opacity={0.9} emissive="#003300" />
+            </mesh>
+            <mesh position={[-1.2, 0, 0]}>
+                <sphereGeometry args={[0.55, 32, 32]} />
+                <meshStandardMaterial color="#00ff00" roughness={0.3} transparent opacity={0.9} emissive="#003300" />
+            </mesh>
+
+            {/* Bonds */}
+             <mesh position={[0.6, 0, 0]} rotation={[0, 0, 1.57]}>
+                <cylinderGeometry args={[0.1, 0.1, 1.2, 8]} />
+                <meshStandardMaterial color="#cccccc" />
+            </mesh>
+            <mesh position={[-0.6, 0, 0]} rotation={[0, 0, 1.57]}>
+                <cylinderGeometry args={[0.1, 0.1, 1.2, 8]} />
+                <meshStandardMaterial color="#cccccc" />
+            </mesh>
+        </group>
+    );
+};
+
+// --- NO2 MOLECULE (Nitrogen Dioxide) ---
+const NO2Molecule: React.FC<{ scaleRef?: React.MutableRefObject<number> }> = ({ scaleRef }) => {
+    const groupRef = useRef<THREE.Group>(null);
+
+    useFrame((state) => {
+        const t = state.clock.getElapsedTime();
+        const s = scaleRef ? (1.0 + scaleRef.current * 0.2) : 1.0;
+        if (groupRef.current) {
+            groupRef.current.rotation.y = t * 0.2;
+            groupRef.current.scale.set(s, s, s);
+        }
+    });
+
+    return (
+        <group ref={groupRef}>
+            {/* Nitrogen (Blue) */}
+            <mesh position={[0, 0.3, 0]}>
+                <sphereGeometry args={[0.5, 32, 32]} />
+                <meshStandardMaterial color="#0000ff" roughness={0.3} emissive="#000044" />
+            </mesh>
+            
+            {/* Oxygens (Red) - Bent */}
+            <mesh position={[0.9, -0.4, 0]}>
+                <sphereGeometry args={[0.45, 32, 32]} />
+                <meshStandardMaterial color="#ff0000" roughness={0.3} emissive="#440000" />
+            </mesh>
+            <mesh position={[-0.9, -0.4, 0]}>
+                <sphereGeometry args={[0.45, 32, 32]} />
+                <meshStandardMaterial color="#ff0000" roughness={0.3} emissive="#440000" />
+            </mesh>
+
+             {/* Bonds (Double bond representation via thicker cylinder or 2 cylinders, simple for now) */}
+             <mesh position={[0.45, -0.05, 0]} rotation={[0, 0, -0.8]}>
+                <cylinderGeometry args={[0.1, 0.1, 1.0, 8]} />
+                <meshStandardMaterial color="#888888" />
+            </mesh>
+            <mesh position={[-0.45, -0.05, 0]} rotation={[0, 0, 0.8]}>
+                <cylinderGeometry args={[0.1, 0.1, 1.0, 8]} />
+                <meshStandardMaterial color="#888888" />
+            </mesh>
+        </group>
+    );
+};
+
 
 // --- BURST SHADERS ---
 const burstVertexShader = `
@@ -369,9 +564,9 @@ const CatalystParticles: React.FC<{ type: CatalystType }> = ({ type }) => {
     }, [type]);
 
     const color = useMemo(() => {
-        if (type === 'light') return new THREE.Color('#ffffaa');
-        if (type === 'chemical') return new THREE.Color('#00ff00');
-        return new THREE.Color('#ffffff');
+        if (type === 'light') return '#ffffaa';
+        if (type === 'chemical') return '#00ff00';
+        return '#ffffff';
     }, [type]);
 
     const { positions, sizes, randoms } = useMemo(() => {
@@ -393,12 +588,22 @@ const CatalystParticles: React.FC<{ type: CatalystType }> = ({ type }) => {
         return { positions: pos, sizes: sz, randoms: rand };
     }, []);
 
+    // Memoize uniforms to prevent recreation on every render
+    const uniforms = useMemo(() => ({
+        uTime: { value: 0 },
+        uType: { value: typeValue },
+        uColor: { value: new THREE.Color(color) }
+    }), []); 
+
+    // Update uniforms ref values
+    useEffect(() => {
+        uniforms.uType.value = typeValue;
+        uniforms.uColor.value.set(color);
+    }, [typeValue, color, uniforms]);
+
     useFrame((state) => {
         if (ref.current && type !== 'none') {
-             const mat = ref.current.material as THREE.ShaderMaterial;
-             mat.uniforms.uTime.value = state.clock.getElapsedTime();
-             mat.uniforms.uType.value = typeValue;
-             mat.uniforms.uColor.value.lerp(color, 0.1);
+             uniforms.uTime.value = state.clock.getElapsedTime();
         }
     });
 
@@ -418,11 +623,7 @@ const CatalystParticles: React.FC<{ type: CatalystType }> = ({ type }) => {
                     depthWrite={false}
                     vertexShader={catalystVertexShader}
                     fragmentShader={catalystFragmentShader}
-                    uniforms={{
-                        uTime: { value: 0 },
-                        uType: { value: typeValue },
-                        uColor: { value: color }
-                    }}
+                    uniforms={uniforms}
                 />
             </points>
         </group>
@@ -518,6 +719,10 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
     if (element.symbol === 'H2O' && !combinedElement) return <H2OMolecule scaleRef={scaleRef} />;
     if (element.symbol === 'NaCl' && !combinedElement) return <SaltLattice scaleRef={scaleRef} />;
     if (element.symbol === 'HCl' && !combinedElement) return <HClMolecule scaleRef={scaleRef} />;
+    if (element.symbol === 'NH3' && !combinedElement) return <NH3Molecule scaleRef={scaleRef} />;
+    if (element.symbol === 'Fe2O3' && !combinedElement) return <Fe2O3Molecule scaleRef={scaleRef} />;
+    if (element.symbol === 'CaCl2' && !combinedElement) return <CaCl2Molecule scaleRef={scaleRef} />;
+    if (element.symbol === 'NO2' && !combinedElement) return <NO2Molecule scaleRef={scaleRef} />;
     
     return (
         <ParticleSphere 
@@ -541,6 +746,18 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
     if (combinedElement.symbol === 'HCl') {
         return <HClMolecule scaleRef={combinedPinchRef} />;
     }
+    if (combinedElement.symbol === 'NH3') {
+        return <NH3Molecule scaleRef={combinedPinchRef} />;
+    }
+    if (combinedElement.symbol === 'Fe2O3') {
+        return <Fe2O3Molecule scaleRef={combinedPinchRef} />;
+    }
+    if (combinedElement.symbol === 'CaCl2') {
+        return <CaCl2Molecule scaleRef={combinedPinchRef} />;
+    }
+    if (combinedElement.symbol === 'NO2') {
+        return <NO2Molecule scaleRef={combinedPinchRef} />;
+    }
 
     return (
         <ParticleSphere 
@@ -555,7 +772,7 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
   return (
     <>
       <ambientLight intensity={0.5} />
-      {/* Front Light to illuminate center opaque objects like Salt */}
+      {/* Front Light to illuminate center opaque objects like Salt and Molecules */}
       <directionalLight position={[0, 0, 10]} intensity={1.5} color="#ffffff" />
       <pointLight position={[10, 10, 10]} intensity={1.5} />
       <pointLight position={[-10, -10, -5]} intensity={0.5} color="#00ffff" />

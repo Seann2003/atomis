@@ -79,28 +79,7 @@ export const COMBINATIONS: CombinationResult[] = [
     requiredCatalyst: "heat",
   },
   {
-    elements: ["O", "H"],
-    result: {
-      symbol: "H2O",
-      name: "Water",
-      color: "#4488FF",
-      atomicNumber: 0,
-      description: "Essential for life",
-    },
-    requiredCatalyst: "heat",
-  },
-  {
     elements: ["Na", "Cl"],
-    result: {
-      symbol: "NaCl",
-      name: "Salt",
-      color: "#FFFFFF",
-      atomicNumber: 0,
-      description: "Table salt",
-    },
-  },
-  {
-    elements: ["Cl", "Na"],
     result: {
       symbol: "NaCl",
       name: "Salt",
@@ -121,16 +100,6 @@ export const COMBINATIONS: CombinationResult[] = [
     },
   },
   {
-    elements: ["H2O", "Na"],
-    result: {
-      symbol: "NaOH",
-      name: "Sodium Hydroxide",
-      color: "#DDDDDD",
-      atomicNumber: 0,
-      description: "Lye",
-    },
-  },
-  {
     elements: ["H", "Cl"],
     result: {
       symbol: "HCl",
@@ -141,28 +110,7 @@ export const COMBINATIONS: CombinationResult[] = [
     },
   },
   {
-    elements: ["Cl", "H"],
-    result: {
-      symbol: "HCl",
-      name: "Hydrochloric Acid",
-      color: "#CC00FF",
-      atomicNumber: 0,
-      description: "Strong acid",
-    },
-  },
-  {
     elements: ["C", "O"],
-    result: {
-      symbol: "CO2",
-      name: "Carbon Dioxide",
-      color: "#888888",
-      atomicNumber: 0,
-      description: "Greenhouse gas",
-    },
-    requiredCatalyst: "heat",
-  },
-  {
-    elements: ["O", "C"],
     result: {
       symbol: "CO2",
       name: "Carbon Dioxide",
@@ -184,28 +132,7 @@ export const COMBINATIONS: CombinationResult[] = [
     requiredCatalyst: "chemical",
   },
   {
-    elements: ["H", "N"],
-    result: {
-      symbol: "NH3",
-      name: "Ammonia",
-      color: "#0000FF",
-      atomicNumber: 0,
-      description: "Cleaner",
-    },
-    requiredCatalyst: "chemical",
-  },
-  {
     elements: ["Fe", "O"],
-    result: {
-      symbol: "Fe2O3",
-      name: "Iron Oxide",
-      color: "#8B0000",
-      atomicNumber: 0,
-      description: "Rust",
-    },
-  },
-  {
-    elements: ["O", "Fe"],
     result: {
       symbol: "Fe2O3",
       name: "Iron Oxide",
@@ -225,28 +152,7 @@ export const COMBINATIONS: CombinationResult[] = [
     },
   },
   {
-    elements: ["Cl", "Ca"],
-    result: {
-      symbol: "CaCl2",
-      name: "Calcium Chloride",
-      color: "#DDDDDD",
-      atomicNumber: 0,
-      description: "De-icing salt",
-    },
-  },
-  {
     elements: ["N", "O"],
-    result: {
-      symbol: "NO2",
-      name: "Nitrogen Dioxide",
-      color: "#993300",
-      atomicNumber: 0,
-      description: "Pollutant",
-    },
-    requiredCatalyst: "light",
-  },
-  {
-    elements: ["O", "N"],
     result: {
       symbol: "NO2",
       name: "Nitrogen Dioxide",
@@ -269,17 +175,6 @@ export const COMBINATIONS: CombinationResult[] = [
     requiredCatalyst: "heat",
   },
   {
-    elements: ["O", "S"],
-    result: {
-      symbol: "SO2",
-      name: "Sulfur Dioxide",
-      color: "#FFAA00",
-      atomicNumber: 0,
-      description: "Acid rain component",
-    },
-    requiredCatalyst: "heat",
-  },
-  {
     elements: ["C", "H"],
     result: {
       symbol: "CH4",
@@ -291,28 +186,7 @@ export const COMBINATIONS: CombinationResult[] = [
     requiredCatalyst: "heat",
   },
   {
-    elements: ["H", "C"],
-    result: {
-      symbol: "CH4",
-      name: "Methane",
-      color: "#88CC88",
-      atomicNumber: 0,
-      description: "Natural gas",
-    },
-    requiredCatalyst: "heat",
-  },
-  {
     elements: ["S", "H"],
-    result: {
-      symbol: "H2S",
-      name: "Hydrogen Sulfide",
-      color: "#AA8800",
-      atomicNumber: 0,
-      description: "Rotten egg gas",
-    },
-  },
-  {
-    elements: ["H", "S"],
     result: {
       symbol: "H2S",
       name: "Hydrogen Sulfide",
@@ -333,16 +207,6 @@ export const COMBINATIONS: CombinationResult[] = [
     },
   },
   {
-    elements: ["CO2", "H2O"],
-    result: {
-      symbol: "H2CO3",
-      name: "Carbonic Acid",
-      color: "#4488AA",
-      atomicNumber: 0,
-      description: "Soda water",
-    },
-  },
-  {
     elements: ["HCl", "NaOH"],
     result: {
       symbol: "NaCl",
@@ -353,27 +217,7 @@ export const COMBINATIONS: CombinationResult[] = [
     },
   },
   {
-    elements: ["NaOH", "HCl"],
-    result: {
-      symbol: "NaCl",
-      name: "Salt",
-      color: "#FFFFFF",
-      atomicNumber: 0,
-      description: "Neutralization reaction",
-    },
-  },
-  {
     elements: ["NH3", "HCl"],
-    result: {
-      symbol: "NH4Cl",
-      name: "Ammonium Chloride",
-      color: "#CCCCCC",
-      atomicNumber: 0,
-      description: "Smoke",
-    },
-  },
-  {
-    elements: ["HCl", "NH3"],
     result: {
       symbol: "NH4Cl",
       name: "Ammonium Chloride",

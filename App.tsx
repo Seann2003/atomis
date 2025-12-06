@@ -7,6 +7,8 @@ import Dashboard from './components/Dashboard';
 import MascotGuide from './components/MascotGuide';
 import { ELEMENTS, COMBINATIONS } from './constants';
 import { TrackingData, ElementData, CatalystType, GameState } from './types';
+import successChime from './assets/sounds/success-chime.mp3';
+import softError from './assets/sounds/soft-error.mp3';
 
 const App: React.FC = () => {
   const [isCameraReady, setIsCameraReady] = useState(false);
@@ -22,6 +24,14 @@ const App: React.FC = () => {
   
   const [gameState, setGameState] = useState<GameState>('playing');
   const [deathReason, setDeathReason] = useState<string>('');
+  
+  // Quiz Mode State
+  const [quizMode, setQuizMode] = useState<{
+    active: boolean;
+    difficulty: 'easy' | 'medium' | null;
+    targetSymbol: string | null;
+    targetName: string | null;
+  }>({ active: false, difficulty: null, targetSymbol: null, targetName: null });
 
   // Fallback to prevent infinite loading if camera fails to init
   useEffect(() => {
@@ -75,6 +85,7 @@ const App: React.FC = () => {
   // Strict Warning System
   useEffect(() => {
     if (gameState === 'dead') return;
+    if (quizMode.active) return; // Disable warnings in Quiz Mode
     
     const symbols = [leftElement.symbol, rightElement.symbol];
     const hasNa = symbols.includes('Na');
@@ -88,7 +99,7 @@ const App: React.FC = () => {
            setMessage("Hint: Heat might be dangerous...");
        }
     }
-  }, [leftElement, rightElement, activeCatalyst, gameState, message]);
+  }, [leftElement, rightElement, activeCatalyst, gameState, message, quizMode.active]);
 
   const saveElement = (element: ElementData) => {
       const history = JSON.parse(localStorage.getItem('chemLabHistory') || '[]');
@@ -123,6 +134,38 @@ const App: React.FC = () => {
           return newCreatedSlots;
       });
   };
+
+  const startQuiz = useCallback((difficulty: 'easy' | 'medium') => {
+      let target = '';
+      let targetName = '';
+
+      if (difficulty === 'easy') {
+          target = 'H2O';
+          targetName = 'Water';
+      } else {
+          target = 'H2CO3';
+          targetName = 'Soda Water';
+      }
+
+      // Filter slots to include 8 basic elements (atomicNumber > 0)
+      // And shuffle them so the answer isn't always in the first 2 slots
+      const slots = ELEMENTS.filter(e => e.atomicNumber > 0)
+          .slice(0, 8)
+          .sort(() => Math.random() - 0.5);
+
+      setLabSlots(slots);
+      // Reset active elements to first available (now randomized)
+      if (slots.length > 0) {
+        setLeftElement(slots[0]);
+        setRightElement(slots[1] || slots[0]);
+      }
+      
+      setQuizMode({ active: true, difficulty, targetSymbol: target, targetName });
+      setIsDashboardOpen(false);
+      setMessage(`QUIZ: CREATE ${targetName.toUpperCase()}`);
+      // Clear any previous lab created slots
+      setLabCreatedSlots([]);
+  }, []);
 
   // Error State Ref (for update loop access)
   const fusionErrorRef = useRef(false);
@@ -179,14 +222,127 @@ const App: React.FC = () => {
             return;
         }
 
+        // QUIZ LOGIC
+        if (quizMode.active && quizMode.targetSymbol) {
+             // Check if result matches target
+             if (combo.result.symbol === quizMode.targetSymbol) {
+                 setCombinedElement(combo.result);
+                 setMessage("QUIZ SUCCESS! RETURNING...");
+                 fusionErrorRef.current = false;
+                 
+                 setTimeout(() => {
+                     setCombinedElement(null);
+                     setQuizMode({ active: false, difficulty: null, targetSymbol: null, targetName: null });
+                     setIsDashboardOpen(true);
+                     setMessage("LAB READY");
+                 }, 3000);
+                 return;
+             }
+
+             // Check if result is a valid intermediate step
+             // Valid intermediates for H2CO3: H2O, CO2
+             const validIntermediates = quizMode.difficulty === 'medium' ? ['H2O', 'CO2'] : [];
+             
+             if (!validIntermediates.includes(combo.result.symbol)) {
+                 // WRONG MIX
+                 setCombinedElement(combo.result); 
+                 setMessage("QUIZ FAILED! WRONG MIX");
+                 fusionErrorRef.current = true;
+                 
+                 setTimeout(() => {
+                     setCombinedElement(null);
+                     setQuizMode({ active: false, difficulty: null, targetSymbol: null, targetName: null });
+                     setIsDashboardOpen(true);
+                     setMessage("LAB READY");
+                 }, 3000);
+                 return;
+             }
+        }
+
         setCombinedElement(combo.result);
         setMessage(`FUSION SUCCESS: ${combo.result.name}`);
         fusionErrorRef.current = false;
     } else {
+      // Quiz Failure for Incompatible Elements
+      if (quizMode.active) {
+          setCombinedElement({
+              symbol: 'X',
+              name: 'Failed Quiz',
+              color: '#ff0000',
+              atomicNumber: 0,
+              description: 'Incompatible Mixture'
+          });
+          setMessage("QUIZ FAILED! INCOMPATIBLE");
+          fusionErrorRef.current = true;
+          
+          setTimeout(() => {
+              setCombinedElement(null);
+              setQuizMode({ active: false, difficulty: null, targetSymbol: null, targetName: null });
+              setIsDashboardOpen(true);
+              setMessage("LAB READY");
+              fusionErrorRef.current = false;
+          }, 3000);
+          return;
+      }
+
       setMessage("Reaction Unstable: Incompatible");
       fusionErrorRef.current = true; 
     }
-  }, [leftElement, rightElement, combinedElement, activeCatalyst, gameState]);
+  }, [leftElement, rightElement, combinedElement, activeCatalyst, gameState, quizMode]);
+
+  // Play success sound when elements are successfully combined
+  const prevCombinedElementRef = useRef<ElementData | null>(null);
+  useEffect(() => {
+    // Only play sound when combinedElement changes from null to a value (new combination)
+    if (combinedElement && 
+        !prevCombinedElementRef.current &&
+        combinedElement.symbol !== 'BOOM' && 
+        combinedElement.symbol !== 'X' &&
+        (message.includes('FUSION SUCCESS') || message.includes('QUIZ SUCCESS'))) {
+      try {
+        const audio = new Audio(successChime);
+        audio.volume = 0.7;
+        audio.play().catch(() => {
+          // Ignore errors if audio fails to play
+        });
+      } catch (error) {
+        // Ignore errors
+      }
+    }
+    // Update ref to track previous value
+    prevCombinedElementRef.current = combinedElement;
+  }, [combinedElement, message]);
+
+  // Play error sound when elements cannot be mixed
+  const prevMessageRef = useRef<string>('');
+  useEffect(() => {
+    // Check if this is an error message
+    const isError = message.includes('Failed') || 
+                    message.includes('Incompatible') || 
+                    message.includes('QUIZ FAILED') || 
+                    message.includes('Reaction Unstable');
+    
+    // Check if this is a new error message (different from previous)
+    const isNewError = isError && message !== prevMessageRef.current;
+    
+    // Don't play if it's a success message
+    const isSuccess = message.includes('FUSION SUCCESS') || message.includes('QUIZ SUCCESS');
+    
+    // Play error sound for new error messages
+    if (isNewError && !isSuccess) {
+      try {
+        const audio = new Audio(softError);
+        audio.volume = 0.7;
+        audio.play().catch(() => {
+          // Ignore errors if audio fails to play
+        });
+      } catch (error) {
+        // Ignore errors
+      }
+    }
+    // Update ref to track previous message
+    prevMessageRef.current = message;
+  }, [message]);
 
   const performHitTest = (nx: number, ny: number, cameraAspect: number): HTMLElement | null => {
     const screenW = window.innerWidth;
@@ -274,10 +430,16 @@ const App: React.FC = () => {
                  setRightElement(selectedElement);
                  setMessage("ELEMENT SWAPPED (RIGHT)");
              }
-             setTimeout(() => setMessage("LAB READY"), 1000);
+             setTimeout(() => {
+                 if (quizMode.active && quizMode.targetName) {
+                     setMessage(`QUIZ: CREATE ${quizMode.targetName.toUpperCase()}`);
+                 } else {
+                     setMessage("LAB READY");
+                 }
+             }, 1000);
           }
       }
-  }, [labSlots, labCreatedSlots, isDashboardOpen]);
+  }, [labSlots, labCreatedSlots, isDashboardOpen, quizMode]);
 
   const onTrackingUpdate = useCallback((data: TrackingData) => {
     // Disable all gesture effects when dashboard is open
@@ -294,16 +456,22 @@ const App: React.FC = () => {
 
     if (data.isResetGesture || (data.isClosedFist && combinedElement)) {
         if (combinedElement) {
-            saveElement(combinedElement);
+            if (!quizMode.active) {
+                saveElement(combinedElement);
+                setMessage("ELEMENT SAVED TO SHELF");
+                setTimeout(() => setMessage("LAB READY"), 2000);
+            }
             setCombinedElement(null);
-            setMessage("ELEMENT SAVED TO SHELF");
             fusionErrorRef.current = false;
-            setTimeout(() => setMessage("LAB READY"), 2000);
         } else if (data.isResetGesture) {
             if (fusionErrorRef.current || combinedElement) {
                 setCombinedElement(null);
                 fusionErrorRef.current = false;
-                setMessage("LAB READY");
+                if (quizMode.active && quizMode.targetName) {
+                    setMessage(`QUIZ: CREATE ${quizMode.targetName.toUpperCase()}`);
+                } else {
+                    setMessage("LAB READY");
+                }
             }
         }
         return; 
@@ -312,7 +480,11 @@ const App: React.FC = () => {
     if (fusionErrorRef.current) {
         if (!data.isClapping && data.handDistance > 0.25) {
             fusionErrorRef.current = false;
-            setMessage("LAB READY");
+            if (quizMode.active && quizMode.targetName) {
+                setMessage(`QUIZ: CREATE ${quizMode.targetName.toUpperCase()}`);
+            } else {
+                setMessage("LAB READY");
+            }
         }
         return;
     }
@@ -359,16 +531,22 @@ const App: React.FC = () => {
             checkCombination();
             clapStartRef.current = 0; 
         } else {
-             if (!message.includes("WARNING")) {
+             if (!message.includes("WARNING") && !message.includes("QUIZ:")) {
                 if (message !== "HOLD TO FUSE...") setMessage("HOLD TO FUSE...");
              }
         }
     } else {
         clapStartRef.current = 0;
-        if (message === "HOLD TO FUSE...") setMessage("LAB READY");
+        if (message === "HOLD TO FUSE...") {
+            if (quizMode.active && quizMode.targetName) {
+                setMessage(`QUIZ: CREATE ${quizMode.targetName.toUpperCase()}`);
+            } else {
+                setMessage("LAB READY");
+            }
+        }
     }
 
-  }, [combinedElement, message, checkCombination, handleInteraction, isDashboardOpen]);
+  }, [combinedElement, message, checkCombination, handleInteraction, isDashboardOpen, quizMode]);
 
   return (
     <div className="relative w-full h-full bg-black overflow-hidden select-none">
@@ -436,6 +614,7 @@ const App: React.FC = () => {
                }}
                savedElements={savedElements}
                labSlots={labSlots}
+               onStartQuiz={startQuiz}
             />
             <MascotGuide 
                message={message}

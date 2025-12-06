@@ -1,45 +1,42 @@
-export enum ElementType {
-  HYDROGEN = 'Hydrogen',
-  CARBON = 'Carbon',
-  GOLD = 'Gold'
-}
 
-export enum ShapeTemplate {
-  ATOM = 'Atom',
-  HEART = 'Heart',
-  FLOWER = 'Flower',
-  SATURN = 'Saturn',
-  FIREWORKS = 'Fireworks'
-}
-
-export interface ParticleConfig {
+export interface ElementData {
+  symbol: string;
+  name: string;
   color: string;
-  count: number;
-  size: number;
-  description?: string;
+  atomicNumber: number;
+  description: string;
+  level?: number; // 1 = Base, 2 = Compound, 3 = Complex
 }
 
-export interface HandState {
-  isTracking: boolean;
-  separation: number; // 0 to 1 (normalized distance between hands)
-  tension: number; // 0 to 1 (clenched fist or pinch intensity)
-  position: [number, number, number]; // Average center of hands
+export type CatalystType = 'none' | 'heat' | 'light' | 'chemical';
+
+export interface CombinationResult {
+  elements: [string, string]; // symbols
+  result: ElementData;
+  requiredCatalyst?: CatalystType;
 }
 
-export const ELEMENT_CONFIGS: Record<ElementType, ParticleConfig> = {
-  [ElementType.HYDROGEN]: {
-    color: '#00BFFF',
-    count: 200,
-    size: 0.8,
-  },
-  [ElementType.CARBON]: {
-    color: '#A9A9A9',
-    count: 600,
-    size: 0.5,
-  },
-  [ElementType.GOLD]: {
-    color: '#FFD700',
-    count: 1500,
-    size: 0.3,
-  }
-};
+export interface HandGestureState {
+  pinchDistance: number; // 0 to 1
+  isPinching: boolean;
+  isPointing: boolean; // Index finger up, others curled
+  position: { x: number; y: number; z: number }; // Palm Center
+  indexPosition: { x: number; y: number; z: number }; // Index Tip
+  isDetected?: boolean; // Whether hand is currently being tracked
+  isPresent: boolean; // Is the hand currently detected
+}
+
+export type Handedness = 'left' | 'right';
+
+export type GameState = 'playing' | 'dead';
+
+export interface TrackingData {
+  left: HandGestureState;
+  right: HandGestureState;
+  isClapping: boolean;
+  isResetGesture: boolean; // Circular motion detected
+  isClosedFist: boolean; // New gesture for saving
+  handDistance: number;
+  cameraAspect: number; // Width / Height
+  hoveredElement?: string; // Symbol of element being hovered
+}

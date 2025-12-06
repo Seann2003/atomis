@@ -1,5 +1,5 @@
 {
-  "name": "elemental-particles-3d",
+  "name": "chemiparticles-3d",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,15 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react-dom": "^19.2.1",
     "react": "^19.2.1",
-    "lucide-react": "^0.556.0",
-    "@google/genai": "^1.31.0",
-    "@react-three/fiber": "^9.4.2",
-    "@react-three/drei": "^10.7.7",
+    "react-dom": "^19.2.1",
+    "react-router-dom": "^6.28.0",
+    "convex": "^1.20.0",
     "@mediapipe/tasks-vision": "^0.10.22-rc.20250304",
-    "zustand": "^5.0.9",
-    "three": "^0.181.2"
+    "@react-three/fiber": "^9.4.2",
+    "three": "^0.181.2",
+    "@react-three/drei": "^10.7.7"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

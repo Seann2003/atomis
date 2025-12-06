@@ -3,76 +3,105 @@ import { HandGestureState } from '../types';
 
 // Indices for landmarks
 const WRIST = 0;
-const THUMB_CMC = 1;
-const THUMB_MCP = 2;
-const THUMB_IP = 3;
 const THUMB_TIP = 4;
 const INDEX_MCP = 5;
 const INDEX_TIP = 8;
 const MIDDLE_MCP = 9;
 const MIDDLE_TIP = 12;
 const RING_TIP = 16;
-const PINKY_MCP = 17;
 const PINKY_TIP = 20;
 
 function distance(a: NormalizedLandmark, b: NormalizedLandmark) {
   return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
 }
 
+// Class to track history of points for gesture recognition (Circle Reset)
+export class GestureBuffer {
+  history: { x: number; y: number; time: number }[] = [];
+  
+  addPoint(x: number, y: number) {
+    const now = Date.now();
+    this.history.push({ x, y, time: now });
+    // Keep last 1 second of data
+    this.history = this.history.filter(p => now - p.time < 1000);
+  }
+
+  detectCircle(): boolean {
+    if (this.history.length < 20) return false;
+
+    // 1. Calculate Centroid
+    let sumX = 0, sumY = 0;
+    this.history.forEach(p => { sumX += p.x; sumY += p.y; });
+    const centerX = sumX / this.history.length;
+    const centerY = sumY / this.history.length;
+
+    // 2. Calculate Winding Number (Total angle change)
+    let totalAngle = 0;
+    for (let i = 1; i < this.history.length; i++) {
+      const p1 = this.history[i-1];
+      const p2 = this.history[i];
+      const angle1 = Math.atan2(p1.y - centerY, p1.x - centerX);
+      const angle2 = Math.atan2(p2.y - centerY, p2.x - centerX);
+      
+      let diff = angle2 - angle1;
+      // Normalize diff to -PI to PI
+      if (diff > Math.PI) diff -= 2 * Math.PI;
+      if (diff < -Math.PI) diff += 2 * Math.PI;
+      
+      totalAngle += diff;
+    }
+
+    // Check if total rotation is close to 360 degrees (2 PI)
+    // 5.0 radians is approx 286 degrees. Sufficient for a quick circle.
+    return Math.abs(totalAngle) > 5.0;
+  }
+  
+  clear() {
+    this.history = [];
+  }
+}
+
 export function analyzeHand(landmarks: NormalizedLandmark[]): HandGestureState {
   const thumbTip = landmarks[THUMB_TIP];
   const indexTip = landmarks[INDEX_TIP];
+  const middleTip = landmarks[MIDDLE_TIP];
+  const ringTip = landmarks[RING_TIP];
   const pinkyTip = landmarks[PINKY_TIP];
-  const pinkyMcp = landmarks[PINKY_MCP];
   const wrist = landmarks[WRIST];
   const indexMcp = landmarks[INDEX_MCP];
 
   // 1. Pinch Detection (Thumb tip to Index tip)
   const pinchDist = distance(thumbTip, indexTip);
-  const isPinching = pinchDist < 0.08; // Slightly Relaxed threshold
+  const isPinching = pinchDist < 0.08;
 
-  // Normalize pinch for scaling
-  // Map 0.02 -> 0.25 to 0.0 -> 1.0
-  const normalizedPinch = Math.max(0, Math.min(1, (pinchDist - 0.02) / 0.25));
+  // Normalize pinch
+  const normalizedPinch = Math.max(0, Math.min(1, (pinchDist - 0.02) / 0.20));
 
-  // 2. Gesture Detection
+  // 2. Pointing Detection (Index extended, others curled)
+  const indexExt = distance(indexTip, wrist) > distance(indexMcp, wrist) * 1.5;
+  const middleCurled = distance(middleTip, wrist) < distance(landmarks[MIDDLE_MCP], wrist) * 1.2;
+  const ringCurled = distance(ringTip, wrist) < distance(landmarks[0], wrist) * 0.8; // Rough check
   
-  // Pinky Gesture (Shaka or just Pinky out)
-  // Logic: Pinky extended, Index & Middle curled/close to palm
-  const pinkyDist = distance(pinkyTip, wrist);
-  const pinkyBaseDist = distance(pinkyMcp, wrist);
-  const isPinkyExtended = pinkyDist > pinkyBaseDist * 1.5;
+  const isPointing = indexExt && middleCurled && !isPinching;
 
-  const indexDist = distance(indexTip, wrist);
-  const indexBaseDist = distance(indexMcp, wrist);
-  const isIndexCurled = indexDist < indexBaseDist * 1.2;
-
-  const isPinkyGesture = isPinkyExtended && isIndexCurled;
-
-  // Thumb Gesture (Thumbs Up)
-  // Logic: Thumb tip is far from Index MCP, and other fingers are curled
-  const thumbExt = distance(thumbTip, indexMcp);
-  const isThumbExtended = thumbExt > 0.15;
+  // Calculate Cursor Position
+  // For interaction, we use the midpoint between thumb and index if pinching,
+  // or just index tip if pointing.
+  let cursorX, cursorY;
+  if (isPinching) {
+    cursorX = (thumbTip.x + indexTip.x) / 2;
+    cursorY = (thumbTip.y + indexTip.y) / 2;
+  } else {
+    cursorX = indexTip.x;
+    cursorY = indexTip.y;
+  }
   
-  const middleDist = distance(landmarks[MIDDLE_TIP], wrist);
-  const middleBaseDist = distance(landmarks[MIDDLE_MCP], wrist);
-  const isMiddleCurled = middleDist < middleBaseDist * 1.2;
-
-  // Use a combination of extended thumb and curled fingers
-  const isThumbGesture = isThumbExtended && isIndexCurled && isMiddleCurled;
-
-  // Calculate generic hand center position
-  const handX = (landmarks[0].x + landmarks[5].x + landmarks[17].x) / 3;
-  const handY = (landmarks[0].y + landmarks[5].y + landmarks[17].y) / 3;
-  
-  // MediaPipe Z is relative to wrist
   const handZ = landmarks[0].z; 
 
   return {
     pinchDistance: normalizedPinch,
     isPinching,
-    isPinkyGesture,
-    isThumbGesture,
-    position: { x: handX, y: handY, z: handZ }
+    isPointing,
+    position: { x: cursorX, y: cursorY, z: handZ }
   };
 }

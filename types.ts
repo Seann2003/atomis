@@ -14,16 +14,23 @@ export interface CombinationResult {
 export interface HandGestureState {
   pinchDistance: number; // 0 to 1
   isPinching: boolean;
-  isPinkyGesture: boolean; // Trigger next element
-  isThumbGesture: boolean; // Trigger next element
+  isPointing: boolean; // Index finger up, others curled
   position: { x: number; y: number; z: number };
 }
 
-export type Handedness = 'Left' | 'Right';
+export type Handedness = 'left' | 'right';
+
+export interface DragState {
+  active: boolean;
+  hand: Handedness | null;
+  element: ElementData | null;
+}
 
 export interface TrackingData {
   left: HandGestureState;
   right: HandGestureState;
   isClapping: boolean;
+  isResetGesture: boolean; // Circular motion detected
   handDistance: number;
+  cameraAspect: number; // Width / Height
 }

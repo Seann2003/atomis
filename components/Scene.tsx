@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Stars, PerspectiveCamera } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import ParticleSphere from './ParticleSphere';
 import AtomLabel from './AtomLabel';
 import { ElementData, TrackingData } from '../types';
@@ -14,25 +14,20 @@ interface SceneProps {
 }
 
 const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combinedElement, trackingData }) => {
-  // Groups
   const leftGroupRef = useRef<THREE.Group>(null);
   const rightGroupRef = useRef<THREE.Group>(null);
   const combinedGroupRef = useRef<THREE.Group>(null);
   
-  // Particle Data Refs (Pinch Scaling)
   const leftPinchRef = useRef(0.0);
   const rightPinchRef = useRef(0.0);
-  const combinedPinchRef = useRef(0.8); // Default large for combined result
+  const combinedPinchRef = useRef(0.8);
 
-  // Opacity Targets for transition
   const [opacities, setOpacities] = useState({ left: 1, right: 1, combined: 0 });
 
   useEffect(() => {
     if (combinedElement) {
-        // Trigger Fusion Transition
         setOpacities({ left: 0, right: 0, combined: 1 });
     } else {
-        // Reset to Split
         setOpacities({ left: 1, right: 1, combined: 0 });
     }
   }, [combinedElement]);
@@ -40,64 +35,44 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
   useFrame((state) => {
     const data = trackingData.current;
     
-    // Update Scale Inputs from Hands
-    // If combined, we ignore hands for left/right pinch and just default them
+    // Smooth input scaling
     leftPinchRef.current = combinedElement ? 0 : data.left.pinchDistance;
     rightPinchRef.current = combinedElement ? 0 : data.right.pinchDistance;
     
-    // Screen to World Mapping
-    const mapX = (x: number) => (x - 0.5) * 14;
-    const mapY = (y: number) => -(y - 0.5) * 8;
+    // Use the same coordinate mapping logic as UI or simple approximation for 3D depth
+    // Note: To perfectly match the DOM cursor, we would need to unproject screen coords.
+    // However, for the 3D particles, a simpler map often feels better as it keeps them in the "world" center.
+    // Let's stick to the previous world map but ensure it covers the view.
+    const mapX = (x: number) => (x - 0.5) * 16; // Wider range
+    const mapY = (y: number) => -(y - 0.5) * 9;
 
-    // --- ANIMATION LOGIC ---
-
-    // 1. LEFT ELEMENT
     if (leftGroupRef.current) {
         let targetPos = new THREE.Vector3(0,0,0);
-        
-        if (combinedElement) {
-            // Fusion: Move to center
-            targetPos.set(0, 0, 0);
-        } else {
-            // Normal: Follow Hand
-            targetPos.set(mapX(data.left.position.x), mapY(data.left.position.y), 0);
-        }
-        
-        // Smooth movement
+        if (combinedElement) targetPos.set(0, 0, 0);
+        else targetPos.set(mapX(data.left.position.x), mapY(data.left.position.y), 0);
         leftGroupRef.current.position.lerp(targetPos, 0.1);
-        
-        // Rotate slightly based on movement
         leftGroupRef.current.rotation.z += 0.005;
     }
 
-    // 2. RIGHT ELEMENT
     if (rightGroupRef.current) {
         let targetPos = new THREE.Vector3(0,0,0);
-        
-        if (combinedElement) {
-            targetPos.set(0, 0, 0);
-        } else {
-            targetPos.set(mapX(data.right.position.x), mapY(data.right.position.y), 0);
-        }
-        
+        if (combinedElement) targetPos.set(0, 0, 0);
+        else targetPos.set(mapX(data.right.position.x), mapY(data.right.position.y), 0);
         rightGroupRef.current.position.lerp(targetPos, 0.1);
         rightGroupRef.current.rotation.z -= 0.005;
     }
 
-    // 3. COMBINED ELEMENT
     if (combinedGroupRef.current) {
-        // Combined always stays at center, maybe drifts slightly
         combinedGroupRef.current.rotation.y += 0.002;
     }
   });
 
   return (
     <>
-      <ambientLight intensity={0.2} />
-      <pointLight position={[10, 10, 10]} intensity={1} />
-      <Stars radius={100} depth={50} count={7000} factor={4} saturation={0} fade speed={1} />
+      <ambientLight intensity={0.5} />
+      <pointLight position={[10, 10, 10]} intensity={1.5} />
       
-      {/* Left Element - Always Rendered */}
+      {/* Left Element */}
       <group ref={leftGroupRef}>
          <ParticleSphere 
             element={leftElement} 
@@ -105,11 +80,10 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
             opacityTarget={opacities.left}
             isActive={!combinedElement}
           />
-         {/* Only show label if visible */}
          {!combinedElement && <AtomLabel element={leftElement} position={[0, -1.5, 0]} />}
       </group>
 
-      {/* Right Element - Always Rendered */}
+      {/* Right Element */}
       <group ref={rightGroupRef}>
          <ParticleSphere 
             element={rightElement} 
@@ -120,7 +94,7 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
          {!combinedElement && <AtomLabel element={rightElement} position={[0, -1.5, 0]} />}
       </group>
 
-      {/* Combined Element - Always Rendered, but hidden via opacity until needed */}
+      {/* Combined Element */}
       <group ref={combinedGroupRef}>
         {combinedElement && (
             <>
@@ -140,7 +114,7 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
 
 const Scene: React.FC<SceneProps> = (props) => {
   return (
-    <Canvas dpr={[1, 2]}>
+    <Canvas dpr={[1, 2]} gl={{ alpha: true }}>
       <PerspectiveCamera makeDefault position={[0, 0, 8]} fov={60} />
       <SceneContent {...props} />
       <OrbitControls enableZoom={false} enablePan={false} enableRotate={false} />

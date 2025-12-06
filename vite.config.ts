@@ -18,11 +18,6 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
-      },
-      // Support client-side routing - fallback to index.html for all routes
-      preview: {
-        port: 3000,
-        strictPort: true,
-      },
+      }
     };
 });

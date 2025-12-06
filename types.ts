@@ -19,7 +19,8 @@ export interface HandGestureState {
   pinchDistance: number; // 0 to 1
   isPinching: boolean;
   isPointing: boolean; // Index finger up, others curled
-  position: { x: number; y: number; z: number };
+  position: { x: number; y: number; z: number }; // Palm Center
+  indexPosition: { x: number; y: number; z: number }; // Index Tip
 }
 
 export type Handedness = 'left' | 'right';

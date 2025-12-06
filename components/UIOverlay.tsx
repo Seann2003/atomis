@@ -73,46 +73,57 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
         return { x, y };
       };
 
-      // 0. Update Cursors (Zero Latency)
+      // 0. Update Cursors (Using Index Position)
       if (cursorLeft) {
-          if (data.left.position.x !== 0) {
-              const l = getScreenCoords(data.left.position.x, data.left.position.y);
+          if (data.left.indexPosition.x !== 0) {
+              const l = getScreenCoords(data.left.indexPosition.x, data.left.indexPosition.y);
               cursorLeft.style.transform = `translate(${l.x}px, ${l.y}px)`;
               cursorLeft.style.opacity = '1';
-              // Visual flair for pinching
-              cursorLeft.style.borderWidth = data.left.isPinching ? '4px' : '2px';
-              cursorLeft.style.borderColor = data.left.isPinching ? '#00ffff' : 'rgba(0,255,255,0.5)';
+              // Visual flair for pinching (clicking)
+              if (data.left.isPinching) {
+                  cursorLeft.classList.add('scale-75', 'bg-cyan-500/50');
+                  cursorLeft.classList.remove('scale-100', 'bg-cyan-500/20');
+              } else {
+                  cursorLeft.classList.add('scale-100', 'bg-cyan-500/20');
+                  cursorLeft.classList.remove('scale-75', 'bg-cyan-500/50');
+              }
           } else {
               cursorLeft.style.opacity = '0';
           }
       }
 
       if (cursorRight) {
-          if (data.right.position.x !== 0) {
-              const r = getScreenCoords(data.right.position.x, data.right.position.y);
+          if (data.right.indexPosition.x !== 0) {
+              const r = getScreenCoords(data.right.indexPosition.x, data.right.indexPosition.y);
               cursorRight.style.transform = `translate(${r.x}px, ${r.y}px)`;
               cursorRight.style.opacity = '1';
-              cursorRight.style.borderWidth = data.right.isPinching ? '4px' : '2px';
-              cursorRight.style.borderColor = data.right.isPinching ? '#a855f7' : 'rgba(168,85,247,0.5)';
+              
+              if (data.right.isPinching) {
+                  cursorRight.classList.add('scale-75', 'bg-purple-500/50');
+                  cursorRight.classList.remove('scale-100', 'bg-purple-500/20');
+              } else {
+                  cursorRight.classList.add('scale-100', 'bg-purple-500/20');
+                  cursorRight.classList.remove('scale-75', 'bg-purple-500/50');
+              }
           } else {
               cursorRight.style.opacity = '0';
           }
       }
 
-      // 1. Highlight Items (Shelf + Catalyst) on Hover
+      // 1. Highlight Items (Shelf + Catalyst) on Hover (Using Index Finger for Aiming)
       const interactables = document.querySelectorAll('.interactable-btn');
       interactables.forEach(item => {
           const rect = item.getBoundingClientRect();
           let isHovered = false;
           
-          // Check Left Hand
-          if (data.left.position.x !== 0) {
-              const l = getScreenCoords(data.left.position.x, data.left.position.y);
+          // Check Left Hand (Index)
+          if (data.left.indexPosition.x !== 0) {
+              const l = getScreenCoords(data.left.indexPosition.x, data.left.indexPosition.y);
               if (l.x >= rect.left && l.x <= rect.right && l.y >= rect.top && l.y <= rect.bottom) isHovered = true;
           }
-          // Check Right Hand
-          if (data.right.position.x !== 0) {
-              const r = getScreenCoords(data.right.position.x, data.right.position.y);
+          // Check Right Hand (Index)
+          if (data.right.indexPosition.x !== 0) {
+              const r = getScreenCoords(data.right.indexPosition.x, data.right.indexPosition.y);
               if (r.x >= rect.left && r.x <= rect.right && r.y >= rect.top && r.y <= rect.bottom) isHovered = true;
           }
 
@@ -176,12 +187,16 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
   return (
     <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between">
       
-      {/* CURSORS */}
-      <div id="cursor-left" className="fixed top-0 left-0 w-8 h-8 rounded-full border-2 border-cyan-400 bg-cyan-500/20 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50 transition-colors duration-75">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-1 bg-cyan-200 rounded-full"></div>
+      {/* CURSORS (Index Finger Based) */}
+      <div id="cursor-left" className="fixed top-0 left-0 w-12 h-12 rounded-full border-2 border-cyan-400 bg-cyan-500/20 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50 transition-all duration-150 ease-out flex items-center justify-center">
+          <div className="w-1 h-1 bg-cyan-200 rounded-full opacity-50"></div>
+          {/* Outer Halo */}
+          <div className="absolute inset-0 rounded-full bg-cyan-400/10 blur-sm"></div>
       </div>
-      <div id="cursor-right" className="fixed top-0 left-0 w-8 h-8 rounded-full border-2 border-purple-500 bg-purple-500/20 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50 transition-colors duration-75">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-1 bg-purple-200 rounded-full"></div>
+      <div id="cursor-right" className="fixed top-0 left-0 w-12 h-12 rounded-full border-2 border-purple-500 bg-purple-500/20 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50 transition-all duration-150 ease-out flex items-center justify-center">
+          <div className="w-1 h-1 bg-purple-200 rounded-full opacity-50"></div>
+          {/* Outer Halo */}
+          <div className="absolute inset-0 rounded-full bg-purple-400/10 blur-sm"></div>
       </div>
 
       {/* --- TOP LAB SHELF --- */}
@@ -217,39 +232,40 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
          </div>
       </div>
 
-      {/* --- RIGHT CATALYST PANEL --- */}
-      <div className="absolute right-6 top-1/2 transform -translate-y-1/2 flex flex-col gap-6 pointer-events-auto z-20">
-          <div className="text-[10px] text-white/50 font-mono tracking-widest uppercase text-center rotate-90 origin-right translate-x-4 mb-10">Catalysts</div>
-          
-          <div 
-            id="catalyst-btn-heat"
-            data-type="heat"
-            data-active={activeCatalyst === 'heat'}
-            data-activecolor="#ff4400"
-            className="interactable-btn w-24 h-24 rounded-2xl border-2 flex items-center justify-center backdrop-blur-md transition-all duration-300"
-          >
-            <FlameIcon />
-          </div>
+      {/* --- BOTTOM CATALYST PANEL --- */}
+      <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-3 pointer-events-auto z-30">
+          <div className="flex flex-row gap-6">
+            <div 
+                id="catalyst-btn-heat"
+                data-type="heat"
+                data-active={activeCatalyst === 'heat'}
+                data-activecolor="#ff4400"
+                className="interactable-btn w-20 h-20 rounded-2xl border-2 flex items-center justify-center backdrop-blur-md transition-all duration-300 bg-black/40"
+            >
+                <div className="scale-75"><FlameIcon /></div>
+            </div>
 
-          <div 
-            id="catalyst-btn-light"
-            data-type="light"
-            data-active={activeCatalyst === 'light'}
-            data-activecolor="#ffff00"
-            className="interactable-btn w-24 h-24 rounded-2xl border-2 flex items-center justify-center backdrop-blur-md transition-all duration-300"
-          >
-            <BoltIcon />
-          </div>
+            <div 
+                id="catalyst-btn-light"
+                data-type="light"
+                data-active={activeCatalyst === 'light'}
+                data-activecolor="#ffff00"
+                className="interactable-btn w-20 h-20 rounded-2xl border-2 flex items-center justify-center backdrop-blur-md transition-all duration-300 bg-black/40"
+            >
+                <div className="scale-75"><BoltIcon /></div>
+            </div>
 
-          <div 
-            id="catalyst-btn-chemical"
-            data-type="chemical"
-            data-active={activeCatalyst === 'chemical'}
-            data-activecolor="#00ff44"
-            className="interactable-btn w-24 h-24 rounded-2xl border-2 flex items-center justify-center backdrop-blur-md transition-all duration-300"
-          >
-            <FlaskIcon />
+            <div 
+                id="catalyst-btn-chemical"
+                data-type="chemical"
+                data-active={activeCatalyst === 'chemical'}
+                data-activecolor="#00ff44"
+                className="interactable-btn w-20 h-20 rounded-2xl border-2 flex items-center justify-center backdrop-blur-md transition-all duration-300 bg-black/40"
+            >
+                <div className="scale-75"><FlaskIcon /></div>
+            </div>
           </div>
+          <div className="text-[9px] text-white/30 font-mono tracking-[0.3em] uppercase">Catalysts</div>
       </div>
 
       {/* --- BOTTOM HUD --- */}
@@ -273,8 +289,8 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
             </div>
          )}
          
-         {/* Futuristic Status Ticker */}
-         <div className="absolute bottom-28 left-1/2 transform -translate-x-1/2 text-center w-full pointer-events-none">
+         {/* Futuristic Status Ticker - MOVED UP */}
+         <div className="absolute bottom-44 left-1/2 transform -translate-x-1/2 text-center w-full pointer-events-none">
             <div className="relative inline-block overflow-hidden rounded-md group">
                  {/* High-Tech Clip Path Border */}
                 <div 

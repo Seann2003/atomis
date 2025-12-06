@@ -1,4 +1,5 @@
-import React, { useRef, useMemo, useEffect } from 'react';
+
+import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { TrackingData } from '../types';
@@ -100,8 +101,6 @@ void main() {
   vViewPosition = -mvPosition.xyz;
   gl_Position = projectionMatrix * mvPosition;
   
-  // Pass normal to fragment (will be re-calculated via derivatives usually, 
-  // but passing modified normal helps)
   vNormal = normalize(normalMatrix * (normal + totalDisp * 0.2)); 
 }
 `;
@@ -113,43 +112,36 @@ varying vec3 vViewPosition;
 varying float vDisplacement;
 
 void main() {
-  // 1. Reconstruct Normals using derivatives for sharp liquid look
   vec3 dx = dFdx(vViewPosition);
   vec3 dy = dFdy(vViewPosition);
   vec3 normal = normalize(cross(dx, dy));
 
-  // 2. View Direction
   vec3 viewDir = normalize(vViewPosition);
-
-  // 3. Lighting (Blinn-Phong)
-  vec3 lightDir = normalize(vec3(5.0, 10.0, 7.0)); // Fixed Light source
+  vec3 lightDir = normalize(vec3(5.0, 10.0, 7.0)); 
   vec3 halfDir = normalize(lightDir + viewDir);
   
   float NdotL = max(dot(normal, lightDir), 0.0);
   float NdotH = max(dot(normal, halfDir), 0.0);
   
-  float specular = pow(NdotH, 60.0); // High shininess for wet look
-  
-  // 4. Fresnel (Rim Lighting)
+  float specular = pow(NdotH, 60.0); 
   float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0);
   
-  // 5. Color Mixing
-  // Deep Ocean Blue to Aqua Highlights
-  vec3 deepColor = vec3(0.0, 0.2, 0.5);
-  vec3 shallowColor = vec3(0.0, 0.8, 1.0);
+  // Single layer depth simulation
+  vec3 deepColor = vec3(0.0, 0.1, 0.4);
+  vec3 shallowColor = vec3(0.0, 0.6, 1.0);
   
-  vec3 albedo = mix(deepColor, shallowColor, fresnel + (vDisplacement * 0.2));
+  // Mix based on displacement (fake depth)
+  vec3 albedo = mix(deepColor, shallowColor, 0.5 + (vDisplacement * 0.3));
   
   // Final Composition
   vec3 finalColor = albedo + (specular * vec3(1.0)) + (fresnel * vec3(0.4, 0.8, 1.0));
   
-  gl_FragColor = vec4(finalColor, 0.92); // Slightly transparent
+  gl_FragColor = vec4(finalColor, 0.95); 
 }
 `;
 
 const WaterSimulation: React.FC<WaterSimulationProps> = ({ trackingRef }) => {
   const meshRef = useRef<THREE.Mesh>(null);
-  const coreRef = useRef<THREE.Mesh>(null);
   const dropletsRef = useRef<THREE.InstancedMesh>(null);
   
   // Droplet State
@@ -187,7 +179,7 @@ const WaterSimulation: React.FC<WaterSimulationProps> = ({ trackingRef }) => {
         const avgTension = (data.left.pinchDistance + data.right.pinchDistance) / 2;
         mat.uniforms.uTension.value = THREE.MathUtils.lerp(mat.uniforms.uTension.value, avgTension, 0.1);
 
-        // Map Hands (Screen Space 0-1 to World Space approx -9 to 9)
+        // Map Hands 
         const mapX = (x: number) => (x - 0.5) * 18;
         const mapY = (y: number) => -(y - 0.5) * 10;
         
@@ -199,32 +191,19 @@ const WaterSimulation: React.FC<WaterSimulationProps> = ({ trackingRef }) => {
         mat.uniforms.uHandLeft.value.set(lx, ly, 0);
         mat.uniforms.uHandRight.value.set(rx, ry, 0);
         
-        // Rotate slowly
         meshRef.current.rotation.y = t * 0.1;
         meshRef.current.rotation.z = Math.sin(t * 0.2) * 0.1;
-    }
-
-    // Sync Core
-    if (coreRef.current && meshRef.current) {
-        coreRef.current.rotation.copy(meshRef.current.rotation);
-        // Core pulse
-        const s = 0.8 + Math.sin(t) * 0.05;
-        coreRef.current.scale.set(s,s,s);
     }
 
     // Update Droplets
     if (dropletsRef.current) {
         dropletData.forEach((d, i) => {
-            // Gravity
             d.position.y -= d.velocity;
-            
-            // Reset if out of bounds (Adjusted for smaller sphere)
             if (d.position.y < -3) {
                 d.position.y = 1 + Math.random() * 1;
                 d.position.x = (Math.random() - 0.5) * 2;
                 d.position.z = (Math.random() - 0.5) * 2;
             }
-
             dummy.position.copy(d.position);
             dummy.scale.setScalar(d.scale);
             dummy.updateMatrix();
@@ -236,7 +215,7 @@ const WaterSimulation: React.FC<WaterSimulationProps> = ({ trackingRef }) => {
 
   return (
     <group>
-        {/* Main Water Surface - REDUCED SIZE 3.2 -> 1.3 */}
+        {/* Main Water Surface - Single Mesh Layer */}
         <mesh ref={meshRef}>
             <icosahedronGeometry args={[1.3, 64]} />
             <shaderMaterial
@@ -245,12 +224,6 @@ const WaterSimulation: React.FC<WaterSimulationProps> = ({ trackingRef }) => {
                 uniforms={uniforms}
                 transparent
             />
-        </mesh>
-
-        {/* Inner Deep Core (Depth) - REDUCED SIZE 2.5 -> 1.0 */}
-        <mesh ref={coreRef}>
-            <icosahedronGeometry args={[1.0, 16]} />
-            <meshBasicMaterial color="#001133" side={THREE.BackSide} transparent opacity={0.8} />
         </mesh>
 
         {/* Falling Droplets */}

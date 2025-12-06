@@ -46,6 +46,8 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
   // Animation Loop for UI Updates (No React Render Lag)
   useEffect(() => {
     let animId: number;
+    const cursorLeft = document.getElementById('cursor-left');
+    const cursorRight = document.getElementById('cursor-right');
     
     const updateUI = () => {
       const data = trackingRef.current;
@@ -70,6 +72,32 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
         }
         return { x, y };
       };
+
+      // 0. Update Cursors (Zero Latency)
+      if (cursorLeft) {
+          if (data.left.position.x !== 0) {
+              const l = getScreenCoords(data.left.position.x, data.left.position.y);
+              cursorLeft.style.transform = `translate(${l.x}px, ${l.y}px)`;
+              cursorLeft.style.opacity = '1';
+              // Visual flair for pinching
+              cursorLeft.style.borderWidth = data.left.isPinching ? '4px' : '2px';
+              cursorLeft.style.borderColor = data.left.isPinching ? '#00ffff' : 'rgba(0,255,255,0.5)';
+          } else {
+              cursorLeft.style.opacity = '0';
+          }
+      }
+
+      if (cursorRight) {
+          if (data.right.position.x !== 0) {
+              const r = getScreenCoords(data.right.position.x, data.right.position.y);
+              cursorRight.style.transform = `translate(${r.x}px, ${r.y}px)`;
+              cursorRight.style.opacity = '1';
+              cursorRight.style.borderWidth = data.right.isPinching ? '4px' : '2px';
+              cursorRight.style.borderColor = data.right.isPinching ? '#a855f7' : 'rgba(168,85,247,0.5)';
+          } else {
+              cursorRight.style.opacity = '0';
+          }
+      }
 
       // 1. Highlight Items (Shelf + Catalyst) on Hover
       const interactables = document.querySelectorAll('.interactable-btn');
@@ -148,9 +176,16 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
   return (
     <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between">
       
+      {/* CURSORS */}
+      <div id="cursor-left" className="fixed top-0 left-0 w-8 h-8 rounded-full border-2 border-cyan-400 bg-cyan-500/20 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50 transition-colors duration-75">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-1 bg-cyan-200 rounded-full"></div>
+      </div>
+      <div id="cursor-right" className="fixed top-0 left-0 w-8 h-8 rounded-full border-2 border-purple-500 bg-purple-500/20 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50 transition-colors duration-75">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-1 bg-purple-200 rounded-full"></div>
+      </div>
+
       {/* --- TOP LAB SHELF --- */}
       <div className="w-full pt-6 pointer-events-auto overflow-hidden">
-         {/* Removed max-w constraint to show entire toolbox */}
          <div className="w-full overflow-x-auto pb-8 pt-4 no-scrollbar">
             <div className="flex gap-4 px-8 min-w-max justify-start items-center">
                 {displayElements.map((el) => {
@@ -238,24 +273,32 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
             </div>
          )}
          
-         {/* Instruction / Status */}
+         {/* Futuristic Status Ticker */}
          <div className="absolute bottom-28 left-1/2 transform -translate-x-1/2 text-center w-full pointer-events-none">
-            <div className={`transition-all duration-300`}>
-                <div className={`
-                    inline-block px-10 py-4 rounded-xl border backdrop-blur-lg font-mono tracking-widest uppercase text-sm font-bold shadow-2xl
-                    ${message.includes("HOLD") ? 'bg-yellow-900/40 border-yellow-400 text-yellow-200 animate-pulse ring-2 ring-yellow-500/50' : 
-                      message.includes("SUCCESS") || message.includes("SAVED") ? 'bg-green-900/40 border-green-400 text-green-200 ring-2 ring-green-500/50' :
-                      message.includes("Unstable") || message.includes("Failed") ? 'bg-red-900/40 border-red-500 text-red-200 ring-2 ring-red-500/50' :
-                      'bg-black/80 border-cyan-500/30 text-cyan-50'}
-                `}>
+            <div className="relative inline-block overflow-hidden rounded-md group">
+                 {/* High-Tech Clip Path Border */}
+                <div 
+                    className={`
+                        relative z-10 px-12 py-5 font-mono tracking-widest uppercase text-sm font-bold bg-black/80 backdrop-blur-xl border-l-4 border-r-4
+                        ${message.includes("HOLD") ? 'border-yellow-500 text-yellow-400' : 
+                          message.includes("SUCCESS") || message.includes("SAVED") ? 'border-green-500 text-green-400' :
+                          message.includes("Unstable") || message.includes("Failed") ? 'border-red-500 text-red-400' :
+                          'border-cyan-500 text-cyan-400'}
+                    `}
+                    style={{ clipPath: 'polygon(10% 0, 100% 0, 100% 80%, 90% 100%, 0 100%, 0 20%)' }}
+                >
+                    <span className="mr-4 opacity-50 text-xs">STATUS //</span>
                     {message}
+                    {/* Scanning Line Animation */}
+                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-transparent via-white/5 to-transparent -translate-y-full animate-[scan_2s_linear_infinite]"></div>
                 </div>
             </div>
+
             {!combinedElement && (
-                <div className="mt-6 flex gap-6 justify-center text-[10px] text-white/60 font-mono uppercase tracking-widest">
-                    <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></div>Pinch Select</span>
-                    <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></div>Clap Fuse</span>
-                    <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>Spin Reset</span>
+                <div className="mt-6 flex gap-8 justify-center text-[9px] text-white/40 font-mono uppercase tracking-[0.2em]">
+                    <span className="flex items-center gap-2"><div className="w-1 h-1 bg-cyan-400"></div>Pinch</span>
+                    <span className="flex items-center gap-2"><div className="w-1 h-1 bg-white"></div>Clap</span>
+                    <span className="flex items-center gap-2"><div className="w-1 h-1 bg-red-500"></div>Spin</span>
                 </div>
             )}
          </div>
@@ -282,6 +325,10 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
         .no-scrollbar {
           -ms-overflow-style: none;
           scrollbar-width: none;
+        }
+        @keyframes scan {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
         }
       `}</style>
     </div>

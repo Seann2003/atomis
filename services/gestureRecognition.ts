@@ -1,3 +1,4 @@
+
 import { NormalizedLandmark } from '@mediapipe/tasks-vision';
 import { HandGestureState } from '../types';
 
@@ -52,8 +53,6 @@ export class GestureBuffer {
       totalAngle += diff;
     }
 
-    // Check if total rotation is close to 360 degrees (2 PI)
-    // 5.0 radians is approx 286 degrees. Sufficient for a quick circle.
     return Math.abs(totalAngle) > 5.0;
   }
   
@@ -77,29 +76,25 @@ export function detectClosedFist(landmarks: NormalizedLandmark[]): boolean {
 export function analyzeHand(landmarks: NormalizedLandmark[]): HandGestureState {
   const thumbTip = landmarks[THUMB_TIP];
   const indexTip = landmarks[INDEX_TIP];
-  const middleTip = landmarks[MIDDLE_TIP];
-  const ringTip = landmarks[RING_TIP];
   const indexMcp = landmarks[INDEX_MCP];
-  const pinkyMcp = landmarks[PINKY_MCP];
   const wrist = landmarks[WRIST];
 
   // 1. Pinch Detection (Thumb tip to Index tip)
   const pinchDist = distance(thumbTip, indexTip);
-  const isPinching = pinchDist < 0.08;
+  
+  // Adjusted Threshold: 0.12 for easier click detection
+  const isPinching = pinchDist < 0.12;
 
   // Normalize pinch
   const normalizedPinch = Math.max(0, Math.min(1, (pinchDist - 0.02) / 0.20));
 
-  // 2. Pointing Detection (Index extended, others curled)
+  // 2. Pointing Detection (Index extended, others curled logic moved to simpler checks)
   const indexExt = distance(indexTip, wrist) > distance(indexMcp, wrist) * 1.5;
-  const middleCurled = distance(middleTip, wrist) < distance(landmarks[MIDDLE_MCP], wrist) * 1.2;
-  const isPointing = indexExt && middleCurled && !isPinching;
+  const isPointing = indexExt && !isPinching;
 
-  // 3. Movement Tracking (PALM CENTER)
-  // We use the centroid of Wrist, Index Knuckle, and Pinky Knuckle to approximate the stable palm center.
-  // This ensures movement follows the hand body, not the fingers.
-  const palmX = (wrist.x + indexMcp.x + pinkyMcp.x) / 3;
-  const palmY = (wrist.y + indexMcp.y + pinkyMcp.y) / 3;
+  // 3. Movement Tracking (INDEX TIP)
+  const pointerX = indexTip.x;
+  const pointerY = indexTip.y;
   
   const handZ = landmarks[0].z; 
 
@@ -107,6 +102,6 @@ export function analyzeHand(landmarks: NormalizedLandmark[]): HandGestureState {
     pinchDistance: normalizedPinch,
     isPinching,
     isPointing,
-    position: { x: palmX, y: palmY, z: handZ }
+    position: { x: pointerX, y: pointerY, z: handZ }
   };
 }

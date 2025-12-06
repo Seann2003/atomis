@@ -1,8 +1,10 @@
+
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import ParticleSphere from './ParticleSphere';
-import WaterSimulation from './WaterSimulation'; // Import new component
+import WaterSimulation from './WaterSimulation'; 
+import { SaltPile, SaltLattice } from './SaltSimulation'; 
 import AtomLabel from './AtomLabel';
 import { ElementData, TrackingData, CatalystType } from '../types';
 import * as THREE from 'three';
@@ -16,7 +18,6 @@ interface SceneProps {
 }
 
 // --- H2O MOLECULE (Saved State) ---
-// Kept for when water is selected from shelf
 const waterVertexShader = `
 varying vec2 vUv;
 varying vec3 vNormal;
@@ -107,6 +108,41 @@ const H2OMolecule: React.FC<{ scaleRef?: React.MutableRefObject<number> }> = ({ 
     );
 };
 
+// --- HCl MOLECULE ---
+const HClMolecule: React.FC<{ scaleRef?: React.MutableRefObject<number> }> = ({ scaleRef }) => {
+    const groupRef = useRef<THREE.Group>(null);
+
+    useFrame((state) => {
+        const t = state.clock.getElapsedTime();
+        const s = scaleRef ? (1.0 + scaleRef.current * 0.2) : 1.0;
+        if (groupRef.current) {
+            groupRef.current.rotation.y = t * 0.15;
+            groupRef.current.rotation.z = Math.sin(t * 0.3) * 0.1;
+            groupRef.current.scale.set(s, s, s);
+        }
+    });
+
+    return (
+        <group ref={groupRef}>
+            {/* Hydrogen (White, Small) */}
+            <mesh position={[0.8, 0, 0]}>
+                <sphereGeometry args={[0.3, 32, 32]} />
+                <meshStandardMaterial color="#ffffff" roughness={0.2} metalness={0.1} />
+            </mesh>
+            {/* Chlorine (Green, Large) */}
+            <mesh position={[-0.4, 0, 0]}>
+                <sphereGeometry args={[0.7, 32, 32]} />
+                <meshStandardMaterial color="#00ff00" roughness={0.3} metalness={0.2} transparent opacity={0.9} />
+            </mesh>
+            {/* Bond */}
+            <mesh rotation={[0, 0, Math.PI / 2]} position={[0.2, 0, 0]}>
+                <cylinderGeometry args={[0.1, 0.1, 1.2, 8]} />
+                <meshStandardMaterial color="#cccccc" />
+            </mesh>
+        </group>
+    );
+};
+
 // --- BURST SHADERS ---
 const burstVertexShader = `
 uniform float uTime;
@@ -168,46 +204,135 @@ const CollisionBurst: React.FC<{ color: string }> = ({ color }) => {
     )
 }
 
-// --- CATALYST SIMULATION ---
+// --- SIMPLE PARTICLE FIRE (OPTIMIZED) ---
+const simpleFireVertexShader = `
+uniform float uTime;
+attribute float aSize;
+attribute float aSpeed;
+attribute float aOffset;
+varying float vLife;
+
+void main() {
+    // Cycle life 0 to 1
+    float life = mod(uTime * aSpeed + aOffset, 1.0);
+    vLife = life;
+    
+    vec3 pos = position;
+    // Rise up
+    pos.y += life * 4.0;
+    
+    // Sway with sine wave
+    float sway = sin(uTime * 2.0 + pos.y + aOffset * 10.0) * 0.1 * pos.y;
+    pos.x += sway;
+    pos.z += sway * 0.5;
+    
+    // Taper in at top
+    float width = 1.0 - smoothstep(0.0, 3.5, pos.y);
+    pos.x *= width;
+    pos.z *= width;
+
+    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+    
+    // Size fade
+    gl_PointSize = (aSize * 50.0 * (1.0 - life)) / -mvPosition.z;
+}
+`;
+
+const simpleFireFragmentShader = `
+varying float vLife;
+void main() {
+    vec2 xy = gl_PointCoord.xy - vec2(0.5);
+    float d = length(xy);
+    if (d > 0.5) discard;
+    
+    // Gradient: Yellow bottom -> Red top
+    vec3 color = mix(vec3(1.0, 1.0, 0.0), vec3(1.0, 0.2, 0.0), vLife);
+    
+    // Alpha fade
+    float alpha = (1.0 - vLife) * (1.0 - d * 2.0);
+    
+    gl_FragColor = vec4(color, alpha);
+}
+`;
+
+const SimpleFire: React.FC = () => {
+    const ref = useRef<THREE.Points>(null);
+    const count = 200; // Lightweight count
+
+    const { positions, sizes, speeds, offsets } = useMemo(() => {
+        const pos = new Float32Array(count * 3);
+        const sz = new Float32Array(count);
+        const sp = new Float32Array(count);
+        const off = new Float32Array(count);
+
+        for (let i = 0; i < count; i++) {
+            // Base circle
+            const r = Math.random() * 0.5;
+            const theta = Math.random() * Math.PI * 2;
+            pos[i * 3] = r * Math.cos(theta);
+            pos[i * 3 + 1] = 0; // Starts at bottom
+            pos[i * 3 + 2] = r * Math.sin(theta);
+            
+            sz[i] = Math.random() * 1.5 + 1.0;
+            sp[i] = Math.random() * 0.5 + 0.3; // Speed
+            off[i] = Math.random();
+        }
+        return { positions: pos, sizes: sz, speeds: sp, offsets: off };
+    }, []);
+
+    useFrame((state) => {
+        if (ref.current) {
+            (ref.current.material as THREE.ShaderMaterial).uniforms.uTime.value = state.clock.elapsedTime;
+        }
+    });
+
+    return (
+        <group position={[0, -4.5, 0]}>
+            <points ref={ref}>
+                <bufferGeometry>
+                    <bufferAttribute attach="attributes-position" count={count} array={positions} itemSize={3} />
+                    <bufferAttribute attach="attributes-aSize" count={count} array={sizes} itemSize={1} />
+                    <bufferAttribute attach="attributes-aSpeed" count={count} array={speeds} itemSize={1} />
+                    <bufferAttribute attach="attributes-aOffset" count={count} array={offsets} itemSize={1} />
+                </bufferGeometry>
+                <shaderMaterial
+                    vertexShader={simpleFireVertexShader}
+                    fragmentShader={simpleFireFragmentShader}
+                    uniforms={{ uTime: { value: 0 } }}
+                    transparent
+                    depthWrite={false}
+                    blending={THREE.AdditiveBlending}
+                />
+            </points>
+        </group>
+    );
+};
+
+
+// --- CATALYST SIMULATION (Particles for other types) ---
 const catalystVertexShader = `
 uniform float uTime;
-uniform float uType; // 0=none, 1=heat, 2=light, 3=chemical
+uniform float uType; // 2=light, 3=chemical
 attribute float aSize;
 attribute vec3 aRandom;
 
 void main() {
     vec3 pos = position;
     
-    // BASE: Start at bottom center
-    // Emitters spread slightly in X/Z but mostly move UP Y
-    
-    // HEAT: Rising Embers
-    if (uType > 0.5 && uType < 1.5) {
-        float t = uTime * 2.5;
-        // Cycle Y from 0 to 8
-        float yOffset = mod(t + aRandom.y * 5.0, 8.0);
-        pos.y += yOffset;
-        
-        // Wiggle X/Z
-        pos.x += sin(pos.y + t) * 0.3 * (yOffset * 0.2); 
-        pos.z += cos(pos.y + t) * 0.3 * (yOffset * 0.2);
-    } 
-    // LIGHT: Upward Rays/Beams
-    else if (uType > 1.5 && uType < 2.5) {
+    // Light (Type 2) - Rays
+    if (uType > 1.5 && uType < 2.5) {
         float t = uTime * 8.0;
-        // Fast shooting up
         float yOffset = mod(t + aRandom.y * 10.0, 12.0);
         pos.y += yOffset;
-        pos.x *= (1.0 + yOffset * 0.1); // Spread slightly
+        pos.x *= (1.0 + yOffset * 0.1); 
         pos.z *= (1.0 + yOffset * 0.1);
     }
-    // CHEMICAL: Bubbles Rising
+    // Chemical (Type 3) - Bubbles
     else if (uType > 2.5) {
         float t = uTime * 1.0;
         float yOffset = mod(t + aRandom.y * 8.0, 8.0);
         pos.y += yOffset;
-        
-        // Spiral
         pos.x += sin(t + aRandom.z * 10.0) * 0.5;
         pos.z += cos(t + aRandom.x * 10.0) * 0.5;
     }
@@ -232,19 +357,18 @@ void main() {
 }
 `;
 
-const CatalystSimulation: React.FC<{ type: CatalystType }> = ({ type }) => {
+// Separate component for standard particles to ensure hooks are not conditional
+const CatalystParticles: React.FC<{ type: CatalystType }> = ({ type }) => {
     const ref = useRef<THREE.Points>(null);
     const count = 300;
-    
+
     const typeValue = useMemo(() => {
-        if (type === 'heat') return 1.0;
         if (type === 'light') return 2.0;
         if (type === 'chemical') return 3.0;
         return 0.0;
     }, [type]);
 
     const color = useMemo(() => {
-        if (type === 'heat') return new THREE.Color('#ff5500');
         if (type === 'light') return new THREE.Color('#ffffaa');
         if (type === 'chemical') return new THREE.Color('#00ff00');
         return new THREE.Color('#ffffff');
@@ -256,14 +380,11 @@ const CatalystSimulation: React.FC<{ type: CatalystType }> = ({ type }) => {
         const rand = new Float32Array(count * 3);
         
         for(let i=0; i<count; i++) {
-            // Flatten base position to XZ plane at Y=0
             const theta = Math.random() * Math.PI * 2;
             const r = Math.random() * 1.0; 
-            
-            pos[i*3] = r * Math.cos(theta); // X
-            pos[i*3+1] = 0; // Y start
-            pos[i*3+2] = r * Math.sin(theta); // Z
-            
+            pos[i*3] = r * Math.cos(theta); 
+            pos[i*3+1] = 0; 
+            pos[i*3+2] = r * Math.sin(theta); 
             sz[i] = Math.random() * 0.5 + 0.5;
             rand[i*3] = Math.random();
             rand[i*3+1] = Math.random();
@@ -283,13 +404,12 @@ const CatalystSimulation: React.FC<{ type: CatalystType }> = ({ type }) => {
 
     if (type === 'none') return null;
 
-    // Positioned at BOTTOM CENTER of screen
     return (
         <group position={[0, -4.5, 0]}>
             <points ref={ref}>
                 <bufferGeometry>
                     <bufferAttribute attach="attributes-position" count={count} array={positions} itemSize={3} />
-                    <bufferAttribute attach="attributes-aSize" count={count} array={sizes} itemSize={1} />
+                    <bufferAttribute attach="attributes-aSize" count={sizes.length} array={sizes} itemSize={1} />
                     <bufferAttribute attach="attributes-aRandom" count={count} array={randoms} itemSize={3} />
                 </bufferGeometry>
                 <shaderMaterial 
@@ -309,6 +429,16 @@ const CatalystSimulation: React.FC<{ type: CatalystType }> = ({ type }) => {
     );
 };
 
+const CatalystSimulation: React.FC<{ type: CatalystType }> = ({ type }) => {
+    // Switch to Simple Particle Fire for Heat
+    if (type === 'heat') {
+        return <SimpleFire />;
+    }
+    // Render particles (or null if none) via separate component to encapsulate hooks
+    return <CatalystParticles type={type} />;
+};
+
+// --- SCENE CONTENT ---
 const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combinedElement, trackingData, activeCatalyst }) => {
   const leftGroupRef = useRef<THREE.Group>(null);
   const rightGroupRef = useRef<THREE.Group>(null);
@@ -321,7 +451,6 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
   const [opacities, setOpacities] = useState({ left: 1, right: 1, combined: 0 });
   const [showBurst, setShowBurst] = useState(false);
 
-  // References for Velocity Calculation
   const lastLeftPos = useRef({ x: 0, y: 0 });
   const lastRightPos = useRef({ x: 0, y: 0 });
   const leftRotationSpeed = useRef(0.005);
@@ -329,13 +458,11 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
 
   useEffect(() => {
     if (combinedElement) {
-        // Trigger Fusion Animation
         setOpacities({ left: 0, right: 0, combined: 1 });
         setShowBurst(true);
         const t = setTimeout(() => setShowBurst(false), 1000);
         return () => clearTimeout(t);
     } else {
-        // Reset
         setOpacities({ left: 1, right: 1, combined: 0 });
         setShowBurst(false);
     }
@@ -344,14 +471,13 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
   useFrame((state) => {
     const data = trackingData.current;
     
-    // Smooth input scaling
     leftPinchRef.current = combinedElement ? 0 : data.left.pinchDistance;
     rightPinchRef.current = combinedElement ? 0 : data.right.pinchDistance;
     
     const mapX = (x: number) => (x - 0.5) * 18; 
     const mapY = (y: number) => -(y - 0.5) * 10;
 
-    // LEFT ATOM LOGIC
+    // LEFT
     if (leftGroupRef.current) {
         let targetPos = new THREE.Vector3(0,0,0);
         if (combinedElement) targetPos.set(0, 0, 0);
@@ -369,7 +495,7 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
         lastLeftPos.current = { x: data.left.position.x, y: data.left.position.y };
     }
 
-    // RIGHT ATOM LOGIC
+    // RIGHT
     if (rightGroupRef.current) {
         let targetPos = new THREE.Vector3(0,0,0);
         if (combinedElement) targetPos.set(0, 0, 0);
@@ -388,69 +514,72 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
     }
   });
 
-  const isFreshWaterFusion = combinedElement && combinedElement.symbol === 'H2O';
+  const renderElement = (element: ElementData, scaleRef: React.MutableRefObject<number>, opacity: number, isActive: boolean) => {
+    if (element.symbol === 'H2O' && !combinedElement) return <H2OMolecule scaleRef={scaleRef} />;
+    if (element.symbol === 'NaCl' && !combinedElement) return <SaltLattice scaleRef={scaleRef} />;
+    if (element.symbol === 'HCl' && !combinedElement) return <HClMolecule scaleRef={scaleRef} />;
+    
+    return (
+        <ParticleSphere 
+            element={element} 
+            scaleRef={scaleRef}
+            opacityTarget={opacity}
+            isActive={isActive}
+        />
+    );
+  };
+
+  const renderCombined = () => {
+    if (!combinedElement) return null;
+    
+    if (combinedElement.symbol === 'H2O') {
+        return <WaterSimulation trackingRef={trackingData} />;
+    }
+    if (combinedElement.symbol === 'NaCl') {
+        return <SaltPile />;
+    }
+    if (combinedElement.symbol === 'HCl') {
+        return <HClMolecule scaleRef={combinedPinchRef} />;
+    }
+
+    return (
+        <ParticleSphere 
+            element={combinedElement} 
+            scaleRef={combinedPinchRef}
+            opacityTarget={opacities.combined}
+            isActive={true}
+        />
+    );
+  };
 
   return (
     <>
       <ambientLight intensity={0.5} />
+      {/* Front Light to illuminate center opaque objects like Salt */}
+      <directionalLight position={[0, 0, 10]} intensity={1.5} color="#ffffff" />
       <pointLight position={[10, 10, 10]} intensity={1.5} />
       <pointLight position={[-10, -10, -5]} intensity={0.5} color="#00ffff" />
       
-      {/* 3D Catalyst Particles - BOTTOM CENTER */}
       <CatalystSimulation type={activeCatalyst} />
 
-      {/* Collision Spark Effect */}
       {showBurst && <CollisionBurst color={combinedElement ? combinedElement.color : '#ffffff'} />}
 
       {/* Left Element */}
       <group ref={leftGroupRef}>
-         {leftElement.symbol === 'H2O' && !combinedElement ? (
-             <H2OMolecule scaleRef={leftPinchRef} />
-         ) : (
-             <ParticleSphere 
-                element={leftElement} 
-                scaleRef={leftPinchRef}
-                opacityTarget={opacities.left}
-                isActive={!combinedElement}
-              />
-         )}
+         {renderElement(leftElement, leftPinchRef, opacities.left, !combinedElement)}
          {!combinedElement && <AtomLabel element={leftElement} position={[0, -1.8, 0]} />}
       </group>
 
       {/* Right Element */}
       <group ref={rightGroupRef}>
-         {rightElement.symbol === 'H2O' && !combinedElement ? (
-             <H2OMolecule scaleRef={rightPinchRef} />
-         ) : (
-             <ParticleSphere 
-                element={rightElement} 
-                scaleRef={rightPinchRef}
-                opacityTarget={opacities.right}
-                isActive={!combinedElement}
-              />
-         )}
+         {renderElement(rightElement, rightPinchRef, opacities.right, !combinedElement)}
          {!combinedElement && <AtomLabel element={rightElement} position={[0, -1.8, 0]} />}
       </group>
 
       {/* Combined Element */}
       <group ref={combinedGroupRef}>
-        {combinedElement && (
-            <>
-                {isFreshWaterFusion ? (
-                     // HIGH QUALITY WATER SIMULATION (ACTIVE FUSION)
-                     <WaterSimulation trackingRef={trackingData} />
-                ) : (
-                    // STANDARD PARTICLE SPHERE (OTHER ELEMENTS)
-                     <ParticleSphere 
-                        element={combinedElement} 
-                        scaleRef={combinedPinchRef}
-                        opacityTarget={opacities.combined}
-                        isActive={!!combinedElement}
-                      />
-                )}
-                 <AtomLabel element={combinedElement} position={[0, -2.5, 0]} />
-            </>
-        )}
+        {renderCombined()}
+        {combinedElement && <AtomLabel element={combinedElement} position={[0, -2.5, 0]} />}
       </group>
     </>
   );

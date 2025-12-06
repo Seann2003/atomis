@@ -2,11 +2,15 @@
 
 Atomis is an interactive chemistry exploration platform that transforms the way students learn chemistry. Instead of relying on traditional methods such as flashcards, lectures, and static quizzes, Atomis introduces an immersive 3D environment where users can manipulate elements, fuse compounds, and engage with a chemistry-focused AI assistant.
 
+![Atomis Demo](public/demo.png)
+
 ## Problem
 
 Traditional chemistry learning methods have remained largely unchanged for the past century. Students often find chemistry abstract, complex, and lacking real interactivity. Understanding element behavior and compound formation requires visualization and hands-on experimentation that classrooms rarely provide.
 
 Atomis addresses this gap by offering a fully interactive 3D simulation where learners can explore the periodic table, combine elements to form compounds, and understand chemical properties through immersive interaction.
+
+Slides: https://shorturl.at/riLUZ
 
 ## Features
 

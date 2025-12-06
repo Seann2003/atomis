@@ -4,19 +4,34 @@ import { ELEMENTS, COMBINATIONS } from '../constants';
 import { getMascotFact } from '../utils/mascot';
 import MascotAvatar from './MascotAvatar';
 import { TrackingData } from '../types';
+import clickSound from '../assets/sounds/click.wav';
 
 interface DashboardProps {
   isOpen: boolean;
   onClose: () => void;
   savedElements: ElementData[];
   labSlots: ElementData[];
+  onStartQuiz: (difficulty: 'easy' | 'medium') => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements, labSlots }) => {
+const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements, labSlots, onStartQuiz }) => {
   const [allDiscoverables, setAllDiscoverables] = useState<ElementData[]>([]);
   const [selectedInfo, setSelectedInfo] = useState<ElementData | null>(null);
   const [selectedSlots, setSelectedSlots] = useState<ElementData[]>([]);
   const MAX_SLOTS = 8;
+
+  // Click sound helper
+  const playClickSound = () => {
+    try {
+      const audio = new Audio(clickSound);
+      audio.volume = 0.5;
+      audio.play().catch(() => {
+        // Ignore errors if audio fails to play (e.g., user hasn't interacted yet)
+      });
+    } catch (error) {
+      // Ignore errors
+    }
+  };
 
   // Tracking Ref for the Dashboard Avatar
   const dashboardTrackingRef = useRef<TrackingData>({
@@ -41,6 +56,7 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements, l
     isClapping: false,
     isResetGesture: false,
     isClosedFist: false,
+    isSixtySevenGesture: false,
     handDistance: 1000,
     cameraAspect: 1.77
   });
@@ -238,6 +254,35 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements, l
           {/* Mascot / Info Panel */}
           <div className="w-80 flex-shrink-0 flex flex-col gap-4">
              
+             {/* Quiz Section */}
+             <div className="bg-gradient-to-b from-purple-900/20 to-black/40 border border-purple-500/30 rounded-2xl p-4">
+                <div className="text-xs font-mono text-purple-400 uppercase tracking-widest mb-3">Training Modules</div>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => {
+                          playClickSound();
+                          onStartQuiz('easy');
+                        }}
+                        className="flex-1 bg-purple-900/40 hover:bg-purple-800/60 border border-purple-500/50 rounded-lg py-2 px-3 transition-all interactable-btn"
+                        id="dashboard-quiz-easy"
+                    >
+                        <div className="text-[10px] text-purple-200 font-mono">EASY</div>
+                        <div className="text-sm font-bold text-white">Create Water</div>
+                    </button>
+                    <button
+                        onClick={() => {
+                          playClickSound();
+                          onStartQuiz('medium');
+                        }}
+                        className="flex-1 bg-purple-900/40 hover:bg-purple-800/60 border border-purple-500/50 rounded-lg py-2 px-3 transition-all interactable-btn"
+                         id="dashboard-quiz-medium"
+                    >
+                        <div className="text-[10px] text-purple-200 font-mono">MEDIUM</div>
+                        <div className="text-sm font-bold text-white">Soda Water</div>
+                    </button>
+                </div>
+             </div>
+
              {/* Slot Management Panel */}
              <div className="bg-gradient-to-b from-cyan-900/20 to-black/40 border border-cyan-500/30 rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -273,47 +318,38 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements, l
                 )}
              </div>
 
-             {/* Selected Info Card */}
-             <div className="bg-black/40 border border-white/10 rounded-2xl p-6 min-h-[200px] flex flex-col items-center justify-center text-center relative">
-                {selectedInfo ? (
-                    <>
-                        <div className="absolute top-6 right-6 text-[10px] font-mono border border-white/20 px-2 py-1 rounded text-white/50">LVL {selectedInfo.level || 1}</div>
-                        <div className="text-6xl font-['Orbitron'] font-bold mb-2" style={{color: selectedInfo.color}}>{selectedInfo.symbol}</div>
-                        <div className="text-xl font-bold text-white mb-4">{selectedInfo.name}</div>
-                        {isUnlocked(selectedInfo) && (
-                            <button
-                                onClick={() => toggleSlot(selectedInfo)}
-                                disabled={!isInSlot(selectedInfo) && selectedSlots.length >= MAX_SLOTS}
-                                className={`
-                                    mt-4 px-4 py-2 rounded-lg font-mono text-xs font-bold transition-all
-                                    ${isInSlot(selectedInfo)
-                                        ? 'bg-red-600 hover:bg-red-500 text-white'
-                                        : selectedSlots.length >= MAX_SLOTS
-                                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                                        : 'bg-cyan-600 hover:bg-cyan-500 text-black'
-                                    }
-                                `}
-                            >
-                                {isInSlot(selectedInfo) ? 'REMOVE FROM SLOT' : 'ADD TO SLOT'}
-                            </button>
-                        )}
-                    </>
-                ) : (
-                    <div className="text-white/20 font-mono text-sm">
-                        <div className="text-4xl mb-4 opacity-20">?</div>
-                        SELECT AN ELEMENT<br/>TO ANALYZE
-                    </div>
-                )}
-             </div>
-
              {/* Mascot Area */}
              <div className="bg-gradient-to-b from-gray-900 to-black border border-gray-800 rounded-2xl p-6 relative overflow-hidden flex flex-col">
+                 {/* Background Element Symbol - Top Left, 50% space */}
+                 {selectedInfo && (
+                     <div 
+                         className="absolute -top-4 left-0 pointer-events-none"
+                         style={{ 
+                             width: '50%',
+                             height: '50%',
+                             fontSize: '8rem',
+                             fontWeight: 'bold',
+                             fontFamily: 'Orbitron, sans-serif',
+                             color: selectedInfo.color,
+                             opacity: 0.15,
+                             zIndex: 0,
+                             display: 'flex',
+                             alignItems: 'flex-start',
+                             justifyContent: 'flex-start',
+                             padding: '1rem'
+                         }}
+                     >
+                         {selectedInfo.symbol}
+                     </div>
+                 )}
                  {/* Mascot Graphic (Live 3D Render) */}
-                 <div className="w-full h-48 relative -mt-4 mb-2">
+                 <div className="w-full h-48 relative -mt-4 mb-2" style={{ zIndex: 1 }}>
                     {/* Glow */}
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-cyan-500/20 rounded-full blur-3xl animate-pulse"></div>
-                    {/* Avatar */}
-                    <MascotAvatar trackingData={dashboardTrackingRef} />
+                    <div className="absolute bottom-0 right-0 translate-x-1/4 translate-y-1/4 w-32 h-32 bg-cyan-500/20 rounded-full blur-3xl animate-pulse"></div>
+                    {/* Avatar - Positioned bottom right */}
+                    <div className="absolute bottom-0 -right-14" style={{ transform: 'translate(15%, 15%)' }}>
+                        <MascotAvatar trackingData={dashboardTrackingRef} />
+                    </div>
                  </div>
 
                  <div className="relative z-10 border-t border-white/10 pt-4">
@@ -333,7 +369,10 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements, l
              {/* Close Button */}
              <button 
                 id="dashboard-close-btn"
-                onClick={onClose}
+                onClick={() => {
+                  playClickSound();
+                  onClose();
+                }}
                 disabled={selectedSlots.length === 0}
                 className={`
                     interactable-btn mt-auto w-full py-4 font-bold font-['Orbitron'] tracking-widest rounded-xl transition-all
@@ -372,7 +411,33 @@ const DashboardItem = ({
     onClick: () => void,
     onToggleSlot: () => void,
     canAdd: boolean
-}) => (
+}) => {
+  // Click sound helper
+  const playClickSound = () => {
+    try {
+      const audio = new Audio(clickSound);
+      audio.volume = 0.5;
+      audio.play().catch(() => {
+        // Ignore errors if audio fails to play (e.g., user hasn't interacted yet)
+      });
+    } catch (error) {
+      // Ignore errors
+    }
+  };
+
+  const handleClick = () => {
+    playClickSound();
+    onClick();
+  };
+
+  const handleDoubleClick = () => {
+    if (unlocked) {
+      playClickSound();
+      onToggleSlot();
+    }
+  };
+
+  return (
     <div 
     id={`dashboard-item-${el.symbol}`} // Hook for hit test
     className={`
@@ -384,8 +449,8 @@ const DashboardItem = ({
                 : 'border-white/20 bg-white/5 hover:bg-white/10 hover:border-cyan-500 hover:shadow-[0_0_20px_rgba(34,211,238,0.3)]' 
             : 'border-white/20 bg-black opacity-80 '}
     `}
-    onClick={onClick}
-    onDoubleClick={unlocked ? onToggleSlot : undefined}
+    onClick={handleClick}
+    onDoubleClick={handleDoubleClick}
     style={!unlocked ? { borderColor: 'rgba(255,255,255,0.1)' } : {}}
     >
     {unlocked ? (
@@ -411,6 +476,7 @@ const DashboardItem = ({
             <div className="text-3xl font-mono text-gray-700">?</div>
     )}
     </div>
-);
+  );
+};
 
 export default Dashboard;

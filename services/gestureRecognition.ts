@@ -73,6 +73,108 @@ export function detectClosedFist(landmarks: NormalizedLandmark[]): boolean {
     return indexFolded && middleFolded && ringFolded && pinkyFolded;
 }
 
+// Detect if palm is facing the camera (palm visible, like in the image - "palm up")
+export function detectPalmUp(landmarks: NormalizedLandmark[]): boolean {
+    const wrist = landmarks[WRIST];
+    const middleMcp = landmarks[MIDDLE_MCP];
+    const indexMcp = landmarks[INDEX_MCP];
+    const pinkyMcp = landmarks[PINKY_MCP];
+    const indexTip = landmarks[INDEX_TIP];
+    const middleTip = landmarks[MIDDLE_TIP];
+    const ringTip = landmarks[RING_TIP];
+    const pinkyTip = landmarks[PINKY_TIP];
+    
+    // Calculate palm center z (depth) - average of wrist and knuckles
+    const palmCenterZ = (wrist.z + middleMcp.z + indexMcp.z + pinkyMcp.z) / 4;
+    
+    // Calculate average finger tip z
+    const fingerTipsZ = (indexTip.z + middleTip.z + ringTip.z + pinkyTip.z) / 4;
+    
+    // When palm faces camera (palm visible): palm center is CLOSER to camera than finger tips
+    // In MediaPipe: more positive z = closer to camera
+    // So palmCenterZ should be greater (more positive) than fingerTipsZ
+    const palmFacingCamera = palmCenterZ > fingerTipsZ;
+    
+    // Check if fingers are extended (not curled) - finger tips should be further from wrist in 2D
+    const indexExtended = distance(indexTip, wrist) > distance(indexMcp, wrist) * 1.2;
+    const middleExtended = distance(middleTip, wrist) > distance(middleMcp, wrist) * 1.2;
+    const fingersExtended = indexExtended && middleExtended;
+    
+    // Also check that palm is reasonably open (not a fist)
+    const handOpen = !detectClosedFist(landmarks);
+    
+    return palmFacingCamera && fingersExtended && handOpen;
+}
+
+// Buffer to track alternating up/down motion pattern
+export class AlternatingMotionBuffer {
+    leftHistory: { y: number; time: number }[] = [];
+    rightHistory: { y: number; time: number }[] = [];
+    pattern: 'up' | 'down' | null = null; // Current expected pattern
+    patternCount: number = 0; // Count of pattern repetitions
+    
+    addLeftPoint(y: number) {
+        const now = Date.now();
+        this.leftHistory.push({ y, time: now });
+        this.leftHistory = this.leftHistory.filter(p => now - p.time < 2000); // Keep last 2 seconds
+    }
+    
+    addRightPoint(y: number) {
+        const now = Date.now();
+        this.rightHistory.push({ y, time: now });
+        this.rightHistory = this.rightHistory.filter(p => now - p.time < 2000);
+    }
+    
+    detectAlternatingPattern(leftPalmUp: boolean, rightPalmUp: boolean, leftY: number, rightY: number): boolean {
+        // Both palms must be facing up initially
+        if (!leftPalmUp || !rightPalmUp) {
+            this.reset();
+            return false;
+        }
+        
+        // Calculate relative positions
+        const leftHigher = leftY < rightY; // Lower y = higher on screen
+        const rightHigher = rightY < leftY;
+        
+        // Detect pattern: one up, one down, alternating
+        if (this.pattern === null) {
+            // Start pattern detection
+            if (leftHigher) {
+                this.pattern = 'up';
+                this.patternCount = 1;
+            } else if (rightHigher) {
+                this.pattern = 'down';
+                this.patternCount = 1;
+            }
+            return false;
+        }
+        
+        // Check for pattern change (alternation)
+        if (this.pattern === 'up' && rightHigher) {
+            this.pattern = 'down';
+            this.patternCount++;
+        } else if (this.pattern === 'down' && leftHigher) {
+            this.pattern = 'up';
+            this.patternCount++;
+        }
+        
+        // Need at least 4 alternations (up-down-up-down)
+        if (this.patternCount >= 4) {
+            this.reset();
+            return true;
+        }
+        
+        return false;
+    }
+    
+    reset() {
+        this.pattern = null;
+        this.patternCount = 0;
+        this.leftHistory = [];
+        this.rightHistory = [];
+    }
+}
+
 export function analyzeHand(landmarks: NormalizedLandmark[]): HandGestureState {
   const thumbTip = landmarks[THUMB_TIP];
   const indexTip = landmarks[INDEX_TIP];

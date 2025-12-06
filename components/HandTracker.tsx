@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FilesetResolver, HandLandmarker, HandLandmarkerResult } from '@mediapipe/tasks-vision';
-import { analyzeHand, GestureBuffer } from '../services/gestureRecognition';
+import { analyzeHand, GestureBuffer, detectClosedFist } from '../services/gestureRecognition';
 import { TrackingData } from '../types';
 
 interface HandTrackerProps {
@@ -100,33 +100,32 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
 
       const videoAspect = videoRef.current ? (videoRef.current.videoWidth / videoRef.current.videoHeight) : 1.77;
 
-      // DEFAULTS: If no hands detected, position elements at sides (0.15 and 0.85)
-      // This ensures they separate when hands are lost.
       const trackingData: TrackingData = {
         left: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.15, y: 0.5, z: 0} },
         right: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.85, y: 0.5, z: 0} },
         isClapping: false,
         isResetGesture: false,
+        isClosedFist: false,
         handDistance: 1000,
         cameraAspect: videoAspect
       };
 
       if (result && result.landmarks) {
+        let detectedFist = false;
+
         result.handedness.forEach((h, index) => {
           const landmarks = result!.landmarks[index];
-          // Mirror Logic Check:
-          // MediaPipe 'Right' = User's Physical LEFT hand (in selfie mirror)
-          // MediaPipe 'Left' = User's Physical RIGHT hand
+          // Mirror Logic: 'Right' is User Left
           const label = h[0].categoryName;
           
           const handState = analyzeHand(landmarks);
-          // Invert X because of scaleX(-1) mirror effect
-          handState.position.x = 1 - handState.position.x;
+          handState.position.x = 1 - handState.position.x; // Mirror Inversion
 
-          // Logic for Circular Reset Gesture (History Tracking)
-          // We use the 'corrected' hand mapping for buffers
+          const isFist = detectClosedFist(landmarks);
+          if (isFist) detectedFist = true;
+
+          // Logic for Circular Reset Gesture
           if (handState.isPointing) {
-            // Label 'Right' is Physical Left -> add to Left Buffer
             if (label === 'Right') leftBuffer.current.addPoint(handState.position.x, handState.position.y);
             else rightBuffer.current.addPoint(handState.position.x, handState.position.y);
           } else {
@@ -134,16 +133,13 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
              else rightBuffer.current.clear();
           }
 
-          // Assign to Correct Hand Data
           if (label === 'Right') { 
-             // Physical Left Hand
              trackingData.left = handState;
              if (leftBuffer.current.detectCircle()) {
                 trackingData.isResetGesture = true;
                 leftBuffer.current.clear();
              }
           } else {
-             // Physical Right Hand
              trackingData.right = handState;
              if (rightBuffer.current.detectCircle()) {
                 trackingData.isResetGesture = true;
@@ -151,20 +147,17 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
              }
           }
         });
+        
+        trackingData.isClosedFist = detectedFist;
 
         // Clap Detection
-        // Only valid if we actually have two hands tracked in this frame?
-        // MediaPipe usually returns empty landmarks if hand lost.
         if (result.landmarks.length === 2) {
           const dx = trackingData.left.position.x - trackingData.right.position.x;
           const dy = trackingData.left.position.y - trackingData.right.position.y;
           const dist = Math.sqrt(dx*dx + dy*dy);
           trackingData.handDistance = dist;
           
-          // Threshold for Clap (0.12)
           if (dist < 0.12) trackingData.isClapping = true;
-        } else {
-          trackingData.isClapping = false;
         }
       }
 

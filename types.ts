@@ -1,3 +1,4 @@
+
 export interface ElementData {
   symbol: string;
   name: string;
@@ -6,9 +7,12 @@ export interface ElementData {
   description: string;
 }
 
+export type CatalystType = 'none' | 'heat' | 'light' | 'chemical';
+
 export interface CombinationResult {
   elements: [string, string]; // symbols
   result: ElementData;
+  requiredCatalyst?: CatalystType;
 }
 
 export interface HandGestureState {
@@ -25,6 +29,7 @@ export interface TrackingData {
   right: HandGestureState;
   isClapping: boolean;
   isResetGesture: boolean; // Circular motion detected
+  isClosedFist: boolean; // New gesture for saving
   handDistance: number;
   cameraAspect: number; // Width / Height
   hoveredElement?: string; // Symbol of element being hovered

@@ -61,6 +61,18 @@ export class GestureBuffer {
   }
 }
 
+export function detectClosedFist(landmarks: NormalizedLandmark[]): boolean {
+    const wrist = landmarks[WRIST];
+    
+    // Check if finger tips are close to wrist/MCPs
+    const indexFolded = distance(landmarks[INDEX_TIP], wrist) < distance(landmarks[INDEX_MCP], wrist);
+    const middleFolded = distance(landmarks[MIDDLE_TIP], wrist) < distance(landmarks[MIDDLE_MCP], wrist);
+    const ringFolded = distance(landmarks[RING_TIP], wrist) < distance(landmarks[RING_TIP-3], wrist); // MCP
+    const pinkyFolded = distance(landmarks[PINKY_TIP], wrist) < distance(landmarks[PINKY_TIP-3], wrist);
+
+    return indexFolded && middleFolded && ringFolded && pinkyFolded;
+}
+
 export function analyzeHand(landmarks: NormalizedLandmark[]): HandGestureState {
   const thumbTip = landmarks[THUMB_TIP];
   const indexTip = landmarks[INDEX_TIP];

@@ -1,3 +1,4 @@
+
 import { ElementData, CombinationResult } from './types';
 
 export const ELEMENTS: ElementData[] = [
@@ -15,11 +16,13 @@ export const ELEMENTS: ElementData[] = [
 export const COMBINATIONS: CombinationResult[] = [
   {
     elements: ['H', 'O'],
-    result: { symbol: 'H2O', name: 'Water', color: '#4488FF', atomicNumber: 0, description: 'Essential for life' }
+    result: { symbol: 'H2O', name: 'Water', color: '#4488FF', atomicNumber: 0, description: 'Essential for life' },
+    requiredCatalyst: 'heat'
   },
   {
     elements: ['O', 'H'],
-    result: { symbol: 'H2O', name: 'Water', color: '#4488FF', atomicNumber: 0, description: 'Essential for life' }
+    result: { symbol: 'H2O', name: 'Water', color: '#4488FF', atomicNumber: 0, description: 'Essential for life' },
+    requiredCatalyst: 'heat'
   },
   {
     elements: ['Na', 'Cl'],
@@ -39,20 +42,24 @@ export const COMBINATIONS: CombinationResult[] = [
   },
   {
     elements: ['C', 'O'],
-    result: { symbol: 'CO2', name: 'Carbon Dioxide', color: '#888888', atomicNumber: 0, description: 'Greenhouse gas' }
+    result: { symbol: 'CO2', name: 'Carbon Dioxide', color: '#888888', atomicNumber: 0, description: 'Greenhouse gas' },
+    requiredCatalyst: 'heat'
   },
   {
     elements: ['O', 'C'],
-    result: { symbol: 'CO2', name: 'Carbon Dioxide', color: '#888888', atomicNumber: 0, description: 'Greenhouse gas' }
+    result: { symbol: 'CO2', name: 'Carbon Dioxide', color: '#888888', atomicNumber: 0, description: 'Greenhouse gas' },
+    requiredCatalyst: 'heat'
   },
   // New Combinations
   {
     elements: ['N', 'H'],
-    result: { symbol: 'NH3', name: 'Ammonia', color: '#0000FF', atomicNumber: 0, description: 'Cleaner' }
+    result: { symbol: 'NH3', name: 'Ammonia', color: '#0000FF', atomicNumber: 0, description: 'Cleaner' },
+    requiredCatalyst: 'chemical'
   },
   {
     elements: ['H', 'N'],
-    result: { symbol: 'NH3', name: 'Ammonia', color: '#0000FF', atomicNumber: 0, description: 'Cleaner' }
+    result: { symbol: 'NH3', name: 'Ammonia', color: '#0000FF', atomicNumber: 0, description: 'Cleaner' },
+    requiredCatalyst: 'chemical'
   },
   {
     elements: ['Fe', 'O'],
@@ -72,11 +79,13 @@ export const COMBINATIONS: CombinationResult[] = [
   },
   {
     elements: ['N', 'O'],
-    result: { symbol: 'NO2', name: 'Nitrogen Dioxide', color: '#993300', atomicNumber: 0, description: 'Pollutant' }
+    result: { symbol: 'NO2', name: 'Nitrogen Dioxide', color: '#993300', atomicNumber: 0, description: 'Pollutant' },
+    requiredCatalyst: 'light'
   },
   {
     elements: ['O', 'N'],
-    result: { symbol: 'NO2', name: 'Nitrogen Dioxide', color: '#993300', atomicNumber: 0, description: 'Pollutant' }
+    result: { symbol: 'NO2', name: 'Nitrogen Dioxide', color: '#993300', atomicNumber: 0, description: 'Pollutant' },
+    requiredCatalyst: 'light'
   },
 ];
 

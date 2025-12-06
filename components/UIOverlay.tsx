@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { ElementData, TrackingData } from '../types';
+import React, { useRef, useEffect, useState } from 'react';
+import { ElementData, TrackingData, CatalystType } from '../types';
 import { ELEMENTS } from '../constants';
 
 interface UIOverlayProps {
@@ -8,10 +8,40 @@ interface UIOverlayProps {
   combinedElement: ElementData | null;
   message: string;
   trackingRef: React.MutableRefObject<TrackingData>;
+  activeCatalyst: CatalystType;
+  savedElements: ElementData[];
 }
 
-const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combinedElement, message, trackingRef }) => {
+// Icons
+const FlameIcon = () => (
+    <svg viewBox="0 0 24 24" fill="none" className="w-8 h-8" stroke="currentColor" strokeWidth="1.5">
+        <path d="M12 22c4.97 0 9-4.03 9-9 0-4.97-9-13-9-13S3 8.03 3 13c0 4.97 4.03 9 9 9z" fill="currentColor" fillOpacity="0.2"/>
+        <path d="M12 22c4.97 0 9-4.03 9-9 0-4.97-9-13-9-13S3 8.03 3 13c0 4.97 4.03 9 9 9z" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M12 18c2.21 0 4-1.79 4-4 0-2.21-4-6-4-6s-4 3.79-4 6c0 2.21 1.79 4 4 4z" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+);
+
+const BoltIcon = () => (
+    <svg viewBox="0 0 24 24" fill="none" className="w-8 h-8" stroke="currentColor" strokeWidth="1.5">
+        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" fillOpacity="0.2"/>
+        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+);
+
+const FlaskIcon = () => (
+    <svg viewBox="0 0 24 24" fill="none" className="w-8 h-8" stroke="currentColor" strokeWidth="1.5">
+        <path d="M8.5 2h7M12 2v6M6 22h12a2 2 0 002-2l-3-9a6 6 0 00-6-3h-1a6 6 0 00-6 3l-3 9a2 2 0 002 2z" fill="currentColor" fillOpacity="0.2"/>
+        <path d="M8.5 2h7M12 2v6M6 22h12a2 2 0 002-2l-3-9a6 6 0 00-6-3h-1a6 6 0 00-6 3l-3 9a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round"/>
+        <circle cx="10" cy="16" r="1" fill="currentColor"/>
+        <circle cx="14" cy="18" r="1" fill="currentColor"/>
+    </svg>
+);
+
+const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combinedElement, message, trackingRef, activeCatalyst, savedElements }) => {
   
+  // Combine constant elements with saved ones for the shelf
+  const displayElements = [...savedElements, ...ELEMENTS.filter(e => !savedElements.find(s => s.symbol === e.symbol))];
+
   // Animation Loop for UI Updates (No React Render Lag)
   useEffect(() => {
     let animId: number;
@@ -29,20 +59,20 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
         if (screenAspect > videoAspect) {
             const videoH_pixels = (1 / videoAspect) * screenW;
             const offsetY = (videoH_pixels - screenH) / 2;
-            x = nx * screenW; // DIRECT MAPPING
+            x = nx * screenW; 
             y = ny * videoH_pixels - offsetY;
         } else {
             const videoW_pixels = videoAspect * screenH;
             const offsetX = (videoW_pixels - screenW) / 2;
-            x = nx * videoW_pixels - offsetX; // DIRECT MAPPING
+            x = nx * videoW_pixels - offsetX; 
             y = ny * screenH;
         }
         return { x, y };
       };
 
-      // 1. Highlight Shelf Items on Hover (since no cursor)
-      const shelfItems = document.querySelectorAll('[id^="shelf-item-"]');
-      shelfItems.forEach(item => {
+      // 1. Highlight Items (Shelf + Catalyst) on Hover
+      const interactables = document.querySelectorAll('.interactable-btn');
+      interactables.forEach(item => {
           const rect = item.getBoundingClientRect();
           let isHovered = false;
           
@@ -59,33 +89,51 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
 
           // Apply Hover Styles Direct to DOM
           const el = item as HTMLElement;
+          const isShelfItem = el.id.startsWith('shelf-item-');
+          const isCatalystItem = el.id.startsWith('catalyst-btn-');
+          
           if (isHovered) {
-              el.style.borderColor = 'rgba(0, 255, 255, 0.9)';
               el.style.transform = 'scale(1.15)';
-              el.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
               el.style.zIndex = '100';
-              el.style.boxShadow = `0 0 20px ${el.dataset.color || '#fff'}`;
+              
+              if (isShelfItem) {
+                  el.style.borderColor = 'rgba(0, 255, 255, 0.9)';
+                  el.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+                  el.style.boxShadow = `0 0 20px ${el.dataset.color || '#fff'}`;
+              } else if (isCatalystItem) {
+                  el.style.borderColor = 'white';
+                  el.style.boxShadow = '0 0 15px white';
+                  el.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+              }
           } else {
               // Revert to base styles
-             const isLeftActive = el.dataset.symbol === leftElement.symbol;
-             const isRightActive = el.dataset.symbol === rightElement.symbol;
-             
-             if (isLeftActive) {
-                el.style.borderColor = 'rgba(34, 211, 238, 1)'; // Cyan
-                el.style.boxShadow = '0 0 10px rgba(34,211,238,0.3)';
-             }
-             else if (isRightActive) {
-                el.style.borderColor = 'rgba(168, 85, 247, 1)'; // Purple
-                el.style.boxShadow = '0 0 10px rgba(168,85,247,0.3)';
-             }
-             else {
-                el.style.borderColor = 'rgba(255, 255, 255, 0.15)';
-                el.style.boxShadow = 'none';
-             }
-             
              el.style.transform = 'scale(1)';
-             el.style.backgroundColor = 'rgba(10, 10, 10, 0.7)';
              el.style.zIndex = '1';
+             
+             if (isShelfItem) {
+                 const isLeftActive = el.dataset.symbol === leftElement.symbol;
+                 const isRightActive = el.dataset.symbol === rightElement.symbol;
+                 
+                 if (isLeftActive) {
+                    el.style.borderColor = 'rgba(34, 211, 238, 1)'; // Cyan
+                    el.style.boxShadow = '0 0 10px rgba(34,211,238,0.3)';
+                 }
+                 else if (isRightActive) {
+                    el.style.borderColor = 'rgba(168, 85, 247, 1)'; // Purple
+                    el.style.boxShadow = '0 0 10px rgba(168,85,247,0.3)';
+                 }
+                 else {
+                    el.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                    el.style.boxShadow = 'none';
+                 }
+                 el.style.backgroundColor = 'rgba(10, 10, 10, 0.7)';
+             } else if (isCatalystItem) {
+                 const active = el.dataset.active === 'true';
+                 el.style.backgroundColor = 'rgba(0,0,0,0.6)';
+                 el.style.borderColor = active ? el.dataset.activecolor! : 'rgba(255,255,255,0.2)';
+                 el.style.boxShadow = active ? `0 0 15px ${el.dataset.activecolor}` : 'none';
+                 el.style.color = active ? el.dataset.activecolor! : '#ffffff';
+             }
           }
       });
 
@@ -94,17 +142,16 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
 
     animId = requestAnimationFrame(updateUI);
     return () => cancelAnimationFrame(animId);
-  }, [leftElement, rightElement]);
+  }, [leftElement, rightElement, activeCatalyst, displayElements]);
 
   return (
     <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between">
       
       {/* --- TOP LAB SHELF --- */}
-      {/* Container with horizontal scroll */}
       <div className="w-full pt-6 px-4 pointer-events-auto overflow-hidden">
-         <div className="mx-auto max-w-5xl overflow-x-auto pb-4 no-scrollbar">
-            <div className="flex gap-4 px-4 min-w-max justify-center">
-                {ELEMENTS.map((el) => {
+         <div className="mx-auto max-w-5xl overflow-x-auto pb-8 pt-4 no-scrollbar">
+            <div className="flex gap-4 px-4 min-w-max justify-center items-center">
+                {displayElements.map((el) => {
                     const isLeft = leftElement.symbol === el.symbol;
                     const isRight = rightElement.symbol === el.symbol;
                     
@@ -115,6 +162,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
                     data-symbol={el.symbol}
                     data-color={el.color}
                     className={`
+                        interactable-btn
                         w-20 h-20 border-2 rounded-2xl flex flex-col items-center justify-center relative transition-all duration-300 cursor-pointer backdrop-blur-sm
                         ${isLeft ? 'border-cyan-400 bg-cyan-900/30' : 
                         isRight ? 'border-purple-500 bg-purple-900/30' : 
@@ -132,6 +180,41 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
          </div>
       </div>
 
+      {/* --- RIGHT CATALYST PANEL --- */}
+      <div className="absolute right-6 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 pointer-events-auto z-20">
+          <div className="text-[10px] text-white/50 font-mono tracking-widest uppercase text-center rotate-90 origin-right translate-x-4 mb-10">Catalysts</div>
+          
+          <div 
+            id="catalyst-btn-heat"
+            data-type="heat"
+            data-active={activeCatalyst === 'heat'}
+            data-activecolor="#ff4400"
+            className="interactable-btn w-16 h-16 rounded-2xl border flex items-center justify-center backdrop-blur-md transition-all duration-300"
+          >
+            <FlameIcon />
+          </div>
+
+          <div 
+            id="catalyst-btn-light"
+            data-type="light"
+            data-active={activeCatalyst === 'light'}
+            data-activecolor="#ffff00"
+            className="interactable-btn w-16 h-16 rounded-2xl border flex items-center justify-center backdrop-blur-md transition-all duration-300"
+          >
+            <BoltIcon />
+          </div>
+
+          <div 
+            id="catalyst-btn-chemical"
+            data-type="chemical"
+            data-active={activeCatalyst === 'chemical'}
+            data-activecolor="#00ff44"
+            className="interactable-btn w-16 h-16 rounded-2xl border flex items-center justify-center backdrop-blur-md transition-all duration-300"
+          >
+            <FlaskIcon />
+          </div>
+      </div>
+
       {/* --- BOTTOM HUD --- */}
       <div className="p-6 md:p-10 flex flex-col justify-end">
          
@@ -147,6 +230,9 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
                 <div className="mt-6 text-2xl font-mono text-white tracking-[0.6em] uppercase font-bold text-shadow">
                     {combinedElement.name}
                 </div>
+                <div className="mt-4 text-xs font-mono text-cyan-300 animate-pulse">
+                    CLOSE FIST TO SAVE ELEMENT
+                </div>
             </div>
          )}
          
@@ -156,8 +242,8 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
                 <div className={`
                     inline-block px-10 py-4 rounded-xl border backdrop-blur-lg font-mono tracking-widest uppercase text-sm font-bold shadow-2xl
                     ${message.includes("HOLD") ? 'bg-yellow-900/40 border-yellow-400 text-yellow-200 animate-pulse ring-2 ring-yellow-500/50' : 
-                      message.includes("SUCCESS") ? 'bg-green-900/40 border-green-400 text-green-200 ring-2 ring-green-500/50' :
-                      message.includes("Unstable") ? 'bg-red-900/40 border-red-500 text-red-200 ring-2 ring-red-500/50' :
+                      message.includes("SUCCESS") || message.includes("SAVED") ? 'bg-green-900/40 border-green-400 text-green-200 ring-2 ring-green-500/50' :
+                      message.includes("Unstable") || message.includes("Failed") ? 'bg-red-900/40 border-red-500 text-red-200 ring-2 ring-red-500/50' :
                       'bg-black/80 border-cyan-500/30 text-cyan-50'}
                 `}>
                     {message}
@@ -165,8 +251,8 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
             </div>
             {!combinedElement && (
                 <div className="mt-6 flex gap-6 justify-center text-[10px] text-white/60 font-mono uppercase tracking-widest">
-                    <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></div>Hover & Pinch</span>
-                    <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></div>Clap & Hold</span>
+                    <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></div>Pinch Select</span>
+                    <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></div>Clap Fuse</span>
                     <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>Spin Reset</span>
                 </div>
             )}

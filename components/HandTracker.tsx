@@ -100,9 +100,11 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
 
       const videoAspect = videoRef.current ? (videoRef.current.videoWidth / videoRef.current.videoHeight) : 1.77;
 
+      // DEFAULTS: If no hands detected, position elements at sides (0.15 and 0.85)
+      // This ensures they separate when hands are lost.
       const trackingData: TrackingData = {
-        left: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0} },
-        right: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0} },
+        left: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.15, y: 0.5, z: 0} },
+        right: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.85, y: 0.5, z: 0} },
         isClapping: false,
         isResetGesture: false,
         handDistance: 1000,
@@ -112,41 +114,57 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
       if (result && result.landmarks) {
         result.handedness.forEach((h, index) => {
           const landmarks = result!.landmarks[index];
-          // Mirror Logic: 'Right' label from MP is user's left hand in mirrored view.
+          // Mirror Logic Check:
+          // MediaPipe 'Right' = User's Physical LEFT hand (in selfie mirror)
+          // MediaPipe 'Left' = User's Physical RIGHT hand
           const label = h[0].categoryName;
+          
           const handState = analyzeHand(landmarks);
+          // Invert X because of scaleX(-1) mirror effect
+          handState.position.x = 1 - handState.position.x;
 
-          // Logic for Circular Reset Gesture
+          // Logic for Circular Reset Gesture (History Tracking)
+          // We use the 'corrected' hand mapping for buffers
           if (handState.isPointing) {
-            if (label === 'Right') rightBuffer.current.addPoint(handState.position.x, handState.position.y);
-            else leftBuffer.current.addPoint(handState.position.x, handState.position.y);
+            // Label 'Right' is Physical Left -> add to Left Buffer
+            if (label === 'Right') leftBuffer.current.addPoint(handState.position.x, handState.position.y);
+            else rightBuffer.current.addPoint(handState.position.x, handState.position.y);
           } else {
-             if (label === 'Right') rightBuffer.current.clear();
-             else leftBuffer.current.clear();
+             if (label === 'Right') leftBuffer.current.clear();
+             else rightBuffer.current.clear();
           }
 
+          // Assign to Correct Hand Data
           if (label === 'Right') { 
-             trackingData.right = handState;
-             if (rightBuffer.current.detectCircle()) {
-                trackingData.isResetGesture = true;
-                rightBuffer.current.clear(); // One trigger
-             }
-          } else {
+             // Physical Left Hand
              trackingData.left = handState;
              if (leftBuffer.current.detectCircle()) {
                 trackingData.isResetGesture = true;
                 leftBuffer.current.clear();
              }
+          } else {
+             // Physical Right Hand
+             trackingData.right = handState;
+             if (rightBuffer.current.detectCircle()) {
+                trackingData.isResetGesture = true;
+                rightBuffer.current.clear();
+             }
           }
         });
 
         // Clap Detection
+        // Only valid if we actually have two hands tracked in this frame?
+        // MediaPipe usually returns empty landmarks if hand lost.
         if (result.landmarks.length === 2) {
           const dx = trackingData.left.position.x - trackingData.right.position.x;
           const dy = trackingData.left.position.y - trackingData.right.position.y;
           const dist = Math.sqrt(dx*dx + dy*dy);
           trackingData.handDistance = dist;
-          if (dist < 0.15) trackingData.isClapping = true;
+          
+          // Threshold for Clap (0.12)
+          if (dist < 0.12) trackingData.isClapping = true;
+        } else {
+          trackingData.isClapping = false;
         }
       }
 
@@ -173,7 +191,7 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
         autoPlay 
         playsInline 
         muted 
-        className="fixed top-0 left-0 w-full h-full object-cover z-0 grayscale-[50%] brightness-[0.7] opacity-60"
+        className="fixed top-0 left-0 w-full h-full object-cover z-0 grayscale-[50%] brightness-[0.7] opacity-30"
         style={{ transform: 'scaleX(-1)' }} 
       />
       {error && (

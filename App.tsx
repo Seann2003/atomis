@@ -10,12 +10,15 @@ const App: React.FC = () => {
   const [leftIndex, setLeftIndex] = useState(0);
   const [rightIndex, setRightIndex] = useState(3);
   const [combinedElement, setCombinedElement] = useState<ElementData | null>(null);
-  const [message, setMessage] = useState("Initializing Lab...");
+  const [message, setMessage] = useState("LAB READY");
   
   // Drag State
   const [dragState, setDragState] = useState<DragState>({ active: false, hand: null, element: null });
 
-  // Use a ref for tracking data to pass to UI overlay without re-renders
+  // Error State Ref (for update loop access)
+  const fusionErrorRef = useRef(false);
+
+  // Refs for logic loop
   const trackingDataRef = useRef<TrackingData>({
     left: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0} },
     right: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0} },
@@ -25,14 +28,15 @@ const App: React.FC = () => {
     cameraAspect: 1.77
   });
 
-  const clapTimer = useRef<number | null>(null);
+  const clapStartRef = useRef<number>(0);
+  const CLAP_DURATION_THRESHOLD = 800; // ms to hold clap
 
   const handleCameraReady = useCallback(() => {
     setIsCameraReady(true);
-    setMessage("Lab Active. Pinch elements to select.");
   }, []);
 
   const checkCombination = useCallback(() => {
+    // If already combined, don't do anything
     if (combinedElement) return;
 
     const leftEl = ELEMENTS[leftIndex];
@@ -46,15 +50,14 @@ const App: React.FC = () => {
     if (combo) {
       setCombinedElement(combo.result);
       setMessage(`FUSION SUCCESS: ${combo.result.name}`);
-      
-      if (clapTimer.current) window.clearTimeout(clapTimer.current);
+      fusionErrorRef.current = false;
     } else {
       setMessage("Reaction Unstable: Incompatible");
+      fusionErrorRef.current = true; // Set Error State
     }
   }, [leftIndex, rightIndex, combinedElement]);
 
   // --- HIT TEST LOGIC ---
-  // Converts normalized tracking coords to screen coords and checks collision with Shelf Items
   const performHitTest = (nx: number, ny: number, cameraAspect: number): HTMLElement | null => {
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
@@ -63,20 +66,17 @@ const App: React.FC = () => {
     let screenX, screenY;
 
     if (screenAspect > cameraAspect) {
-        const scale = screenW / 1;
         const videoH_pixels = (1 / cameraAspect) * screenW;
         const offsetY = (videoH_pixels - screenH) / 2;
-        screenX = (1 - nx) * screenW; 
+        screenX = nx * screenW;  // DIRECT MAPPING
         screenY = ny * videoH_pixels - offsetY;
     } else {
-        const scale = screenH / 1;
         const videoW_pixels = cameraAspect * screenH;
         const offsetX = (videoW_pixels - screenW) / 2;
-        screenX = (1 - nx) * videoW_pixels - offsetX; 
+        screenX = nx * videoW_pixels - offsetX; // DIRECT MAPPING
         screenY = ny * screenH;
     }
 
-    // Check collision with all shelf items
     const elements = document.querySelectorAll('[id^="shelf-item-"]');
     for (let i = 0; i < elements.length; i++) {
         const rect = elements[i].getBoundingClientRect();
@@ -89,72 +89,100 @@ const App: React.FC = () => {
 
   const onTrackingUpdate = useCallback((data: TrackingData) => {
     trackingDataRef.current = data;
+    const now = Date.now();
 
-    // 1. Reset Gesture Check
+    // 1. Reset Gesture Check (Index Spin)
     if (data.isResetGesture) {
-        setCombinedElement(null);
-        setMessage("Experiment Reset.");
+        if (combinedElement) {
+            setCombinedElement(null);
+            setMessage("RESET COMPLETE");
+            fusionErrorRef.current = false;
+            setTimeout(() => setMessage("LAB READY"), 1500);
+        } else if (fusionErrorRef.current) {
+            // Also allow reset if stuck in error
+            fusionErrorRef.current = false;
+            setMessage("LAB READY");
+        }
+        return; 
+    }
+
+    // Clear Error State if hands are separated
+    if (fusionErrorRef.current) {
+        if (!data.isClapping && data.handDistance > 0.25) {
+            fusionErrorRef.current = false;
+            setMessage("LAB READY");
+        }
+        // Don't process other logic while in error state
         return;
     }
 
-    if (combinedElement) return; // Disable interaction during fusion
-
-    // 2. Clap Check
-    if (data.isClapping) {
-       checkCombination();
-       return;
+    // 2. Drag Logic (Takes priority over Clap to prevent accidental mix)
+    // We update state inside here to avoid React render loop lag, but setDragState triggers re-render only on change
+    
+    // Check for Start Drag
+    if (!dragState.active && !combinedElement && !fusionErrorRef.current) {
+         // Left
+         if (data.left.isPinching) {
+             const hit = performHitTest(data.left.position.x, data.left.position.y, data.cameraAspect);
+             if (hit) {
+                 const symbol = hit.dataset.symbol;
+                 const el = ELEMENTS.find(e => e.symbol === symbol);
+                 if (el) setDragState({ active: true, hand: 'left', element: el });
+             }
+         }
+         // Right
+         else if (data.right.isPinching) {
+             const hit = performHitTest(data.right.position.x, data.right.position.y, data.cameraAspect);
+             if (hit) {
+                 const symbol = hit.dataset.symbol;
+                 const el = ELEMENTS.find(e => e.symbol === symbol);
+                 if (el) setDragState({ active: true, hand: 'right', element: el });
+             }
+         }
+    }
+    
+    // During Drag
+    if (dragState.active) {
+        const handData = dragState.hand === 'left' ? data.left : data.right;
+        if (!handData.isPinching) {
+            // Drop detected
+            const hit = performHitTest(handData.position.x, handData.position.y, data.cameraAspect);
+            if (!hit && dragState.element) {
+                // Dropped in main area -> Equip
+                const newIndex = ELEMENTS.findIndex(e => e.symbol === dragState.element?.symbol);
+                if (newIndex !== -1) {
+                    if (dragState.hand === 'left') setLeftIndex(newIndex);
+                    else setRightIndex(newIndex);
+                    setMessage("ELEMENT EQUIPPED");
+                    setTimeout(() => setMessage("LAB READY"), 1500);
+                }
+            }
+            setDragState({ active: false, hand: null, element: null });
+        }
+        return; // EXIT HERE: Do not process claps while dragging
     }
 
-    // 3. Drag and Drop Logic State Machine
-    setDragState(current => {
-        // --- START DRAG ---
-        if (!current.active) {
-            // Check Left Hand
-            if (data.left.isPinching) {
-                const hit = performHitTest(data.left.position.x, data.left.position.y, data.cameraAspect);
-                if (hit) {
-                    const symbol = hit.dataset.symbol;
-                    const el = ELEMENTS.find(e => e.symbol === symbol);
-                    if (el) return { active: true, hand: 'left', element: el };
-                }
-            }
-            // Check Right Hand
-            if (data.right.isPinching) {
-                const hit = performHitTest(data.right.position.x, data.right.position.y, data.cameraAspect);
-                if (hit) {
-                    const symbol = hit.dataset.symbol;
-                    const el = ELEMENTS.find(e => e.symbol === symbol);
-                    if (el) return { active: true, hand: 'right', element: el };
-                }
-            }
-            return current;
-        } 
-        
-        // --- DURING DRAG ---
-        else {
-            const handData = current.hand === 'left' ? data.left : data.right;
-            
-            // --- DROP (Pinch Released) ---
-            if (!handData.isPinching) {
-                // Check if dropped back on shelf (Cancel)
-                const hit = performHitTest(handData.position.x, handData.position.y, data.cameraAspect);
-                
-                if (!hit && current.element) {
-                    // Dropped in main area -> SELECT ELEMENT
-                    const newIndex = ELEMENTS.findIndex(e => e.symbol === current.element?.symbol);
-                    if (newIndex !== -1) {
-                        if (current.hand === 'left') setLeftIndex(newIndex);
-                        else setRightIndex(newIndex);
-                        setMessage(`Selected ${current.element.name}`);
-                    }
-                }
-                return { active: false, hand: null, element: null };
-            }
-            return current;
+    // 3. Clap & Hold Logic (Only if not combined and not dragging)
+    if (!combinedElement && data.isClapping && !fusionErrorRef.current) {
+        if (clapStartRef.current === 0) {
+            clapStartRef.current = now;
         }
-    });
+        
+        const duration = now - clapStartRef.current;
+        if (duration > CLAP_DURATION_THRESHOLD) {
+            checkCombination();
+            clapStartRef.current = 0; // Reset
+        } else {
+             // Update UI with holding status (throttled slightly via React state, but acceptable)
+             if (message !== "HOLD TO FUSE...") setMessage("HOLD TO FUSE...");
+        }
+    } else {
+        // Reset timer if clap broken
+        clapStartRef.current = 0;
+        if (message === "HOLD TO FUSE...") setMessage("LAB READY");
+    }
 
-  }, [combinedElement, checkCombination]);
+  }, [combinedElement, dragState, message, checkCombination]);
 
   return (
     <div className="relative w-full h-full bg-black overflow-hidden select-none">

@@ -33,4 +33,5 @@ export interface TrackingData {
   isResetGesture: boolean; // Circular motion detected
   handDistance: number;
   cameraAspect: number; // Width / Height
+  hoveredElement?: string; // Symbol of element being hovered
 }

@@ -104,6 +104,7 @@ export function analyzeHand(landmarks: NormalizedLandmark[]): HandGestureState {
     isPinching,
     isPointing,
     position: { x: palmX, y: palmY, z: palmZ },
-    indexPosition: { x: indexTip.x, y: indexTip.y, z: indexTip.z }
+    indexPosition: { x: indexTip.x, y: indexTip.y, z: indexTip.z },
+    isPresent: true
   };
 }

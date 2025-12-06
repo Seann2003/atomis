@@ -6,20 +6,34 @@ import UIOverlay from './components/UIOverlay';
 import Dashboard from './components/Dashboard';
 import MascotGuide from './components/MascotGuide';
 import { ELEMENTS, COMBINATIONS } from './constants';
-import { TrackingData, ElementData, CatalystType } from './types';
+import { TrackingData, ElementData, CatalystType, GameState } from './types';
 
 const App: React.FC = () => {
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
   
-  // State stores the actual ElementData object now, not just index
   const [leftElement, setLeftElement] = useState<ElementData>(ELEMENTS[0]);
-  const [rightElement, setRightElement] = useState<ElementData>(ELEMENTS[3]); // Chlorine default
+  const [rightElement, setRightElement] = useState<ElementData>(ELEMENTS[3]); 
   
   const [combinedElement, setCombinedElement] = useState<ElementData | null>(null);
   const [message, setMessage] = useState("LAB READY");
   const [activeCatalyst, setActiveCatalyst] = useState<CatalystType>('none');
   const [savedElements, setSavedElements] = useState<ElementData[]>([]);
+  
+  const [gameState, setGameState] = useState<GameState>('playing');
+  const [deathReason, setDeathReason] = useState<string>('');
+
+  // Fallback to prevent infinite loading if camera fails to init
+  useEffect(() => {
+    const t = setTimeout(() => {
+        if (!isCameraReady) {
+            console.warn("Camera init timeout - Forcing app start");
+            setIsCameraReady(true);
+        }
+    }, 10000);
+    return () => clearTimeout(t);
+  }, [isCameraReady]);
+
   const [labSlots, setLabSlots] = useState<ElementData[]>([]);
 
   // Load saved history and lab slots on mount
@@ -45,9 +59,26 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Strict Warning System
+  useEffect(() => {
+    if (gameState === 'dead') return;
+    
+    const symbols = [leftElement.symbol, rightElement.symbol];
+    const hasNa = symbols.includes('Na');
+    const hasH2O = symbols.includes('H2O');
+    
+    // Check if critical condition exists
+    if (hasNa && hasH2O && activeCatalyst === 'heat') {
+      setMessage("WARNING: DO NOT FUSE! HIGHLY EXPLOSIVE!");
+    } else if (hasNa && hasH2O) {
+       if (!message.includes("WARNING")) {
+           setMessage("Hint: Heat might be dangerous...");
+       }
+    }
+  }, [leftElement, rightElement, activeCatalyst, gameState, message]);
+
   const saveElement = (element: ElementData) => {
       const history = JSON.parse(localStorage.getItem('chemLabHistory') || '[]');
-      // Avoid duplicates based on symbol
       if (!history.find((e: ElementData) => e.symbol === element.symbol)) {
           const newHistory = [element, ...history];
           localStorage.setItem('chemLabHistory', JSON.stringify(newHistory));
@@ -75,11 +106,11 @@ const App: React.FC = () => {
 
   // Error State Ref (for update loop access)
   const fusionErrorRef = useRef(false);
+  const lastInteractionTime = useRef(0);
 
-  // Refs for logic loop
   const trackingDataRef = useRef<TrackingData>({
-    left: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0}, indexPosition: {x: 0, y: 0, z: 0} },
-    right: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0}, indexPosition: {x: 0, y: 0, z: 0} },
+    left: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0}, indexPosition: {x: 0, y: 0, z: 0}, isPresent: false },
+    right: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0}, indexPosition: {x: 0, y: 0, z: 0}, isPresent: false },
     isClapping: false,
     isResetGesture: false,
     isClosedFist: false,
@@ -87,31 +118,41 @@ const App: React.FC = () => {
     cameraAspect: 1.77
   });
 
-  // Track hover state to avoid rapid toggling/re-setting state
   const lastLeftHoverRef = useRef<string | null>(null);
   const lastRightHoverRef = useRef<string | null>(null);
 
   const clapStartRef = useRef<number>(0);
-  const CLAP_DURATION_THRESHOLD = 800; // ms to hold clap
+  const CLAP_DURATION_THRESHOLD = 800; 
 
   const handleCameraReady = useCallback(() => {
     setIsCameraReady(true);
   }, []);
 
   const checkCombination = useCallback(() => {
-    // If already combined, don't do anything
-    if (combinedElement) return;
+    if (combinedElement || gameState === 'dead') return;
     
-    // We assume saved elements behave like their base counterparts or we need to add dynamic combinations.
-    // For this demo, we check symbols against the COMBINATIONS constant.
-    
+    const symbols = [leftElement.symbol, rightElement.symbol];
+
+    // EXPLOSION TRAP
+    if (symbols.includes('Na') && symbols.includes('H2O') && activeCatalyst === 'heat') {
+        setGameState('dead');
+        setDeathReason("Sodium reacts violently with water under heat, causing a massive explosion.");
+        setCombinedElement({
+            symbol: 'BOOM',
+            name: 'EXPLOSION',
+            color: '#ff0000',
+            atomicNumber: 0,
+            description: 'Fatal Error'
+        });
+        return;
+    }
+
     const combo = COMBINATIONS.find(c => 
       (c.elements[0] === leftElement.symbol && c.elements[1] === rightElement.symbol) ||
       (c.elements[1] === leftElement.symbol && c.elements[0] === rightElement.symbol)
     );
 
     if (combo) {
-        // Check Catalyst Requirements
         if (combo.requiredCatalyst && combo.requiredCatalyst !== activeCatalyst) {
             setMessage(`Failed: Requires ${combo.requiredCatalyst.toUpperCase()} Catalyst`);
             fusionErrorRef.current = true;
@@ -123,11 +164,10 @@ const App: React.FC = () => {
         fusionErrorRef.current = false;
     } else {
       setMessage("Reaction Unstable: Incompatible");
-      fusionErrorRef.current = true; // Set Error State
+      fusionErrorRef.current = true; 
     }
-  }, [leftElement, rightElement, combinedElement, activeCatalyst]);
+  }, [leftElement, rightElement, combinedElement, activeCatalyst, gameState]);
 
-  // --- HIT TEST LOGIC (Using Index Finger for Aiming) ---
   const performHitTest = (nx: number, ny: number, cameraAspect: number): HTMLElement | null => {
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
@@ -138,12 +178,12 @@ const App: React.FC = () => {
     if (screenAspect > cameraAspect) {
         const videoH_pixels = (1 / cameraAspect) * screenW;
         const offsetY = (videoH_pixels - screenH) / 2;
-        screenX = nx * screenW;  // DIRECT MAPPING
+        screenX = nx * screenW;  
         screenY = ny * videoH_pixels - offsetY;
     } else {
         const videoW_pixels = cameraAspect * screenH;
         const offsetX = (videoW_pixels - screenW) / 2;
-        screenX = nx * videoW_pixels - offsetX; // DIRECT MAPPING
+        screenX = nx * videoW_pixels - offsetX; 
         screenY = ny * screenH;
     }
 
@@ -200,15 +240,12 @@ const App: React.FC = () => {
           const selectedElement = labSlots.find(e => e.symbol === symbol);
           
           if (selectedElement) {
+             lastInteractionTime.current = now;
              if (hand === 'LEFT') {
                  setLeftElement(selectedElement);
-                 setMessage("ELEMENT SWAPPED (LEFT)");
              } else {
                  setRightElement(selectedElement);
-                 setMessage("ELEMENT SWAPPED (RIGHT)");
              }
-             
-             setTimeout(() => setMessage("LAB READY"), 1000);
           }
       }
   }, [labSlots, isDashboardOpen]);
@@ -223,8 +260,9 @@ const App: React.FC = () => {
     
     trackingDataRef.current = data;
     const now = Date.now();
+    
+    if (gameState === 'dead') return;
 
-    // 1. Reset Gesture Check (Index Spin) OR Closed Fist Save
     if (data.isResetGesture || (data.isClosedFist && combinedElement)) {
         if (combinedElement) {
             saveElement(combinedElement);
@@ -233,7 +271,6 @@ const App: React.FC = () => {
             fusionErrorRef.current = false;
             setTimeout(() => setMessage("LAB READY"), 2000);
         } else if (data.isResetGesture) {
-            // Just reset if nothing to save
             if (fusionErrorRef.current || combinedElement) {
                 setCombinedElement(null);
                 fusionErrorRef.current = false;
@@ -243,40 +280,46 @@ const App: React.FC = () => {
         return; 
     }
 
-    // Clear Error State if hands are separated
     if (fusionErrorRef.current) {
         if (!data.isClapping && data.handDistance > 0.25) {
             fusionErrorRef.current = false;
             setMessage("LAB READY");
         }
-        // Don't process other logic while in error state
         return;
     }
 
-    // 2. HOVER SELECTION LOGIC (Instant Switch)
-    // Only if not combined
     if (!combinedElement && !fusionErrorRef.current) {
-        
-        // --- LEFT HAND ---
-        const leftHit = performHitTest(data.left.indexPosition.x, data.left.indexPosition.y, data.cameraAspect);
-        if (leftHit && leftHit.id !== lastLeftHoverRef.current) {
-            handleInteraction(leftHit, 'LEFT');
-            lastLeftHoverRef.current = leftHit.id;
-        } else if (!leftHit) {
+        // Only hit test if the hand is present
+        if (data.left.isPresent) {
+            const leftHit = performHitTest(data.left.indexPosition.x, data.left.indexPosition.y, data.cameraAspect);
+            if (leftHit) {
+                if (leftHit.id !== lastLeftHoverRef.current || data.left.isPinching) {
+                    handleInteraction(leftHit, 'LEFT', data.left.isPinching);
+                    lastLeftHoverRef.current = leftHit.id;
+                }
+            } else {
+                lastLeftHoverRef.current = null;
+            }
+        } else {
+            // Reset hover state if hand lost
             lastLeftHoverRef.current = null;
         }
         
-        // --- RIGHT HAND ---
-        const rightHit = performHitTest(data.right.indexPosition.x, data.right.indexPosition.y, data.cameraAspect);
-        if (rightHit && rightHit.id !== lastRightHoverRef.current) {
-            handleInteraction(rightHit, 'RIGHT');
-            lastRightHoverRef.current = rightHit.id;
-        } else if (!rightHit) {
-            lastRightHoverRef.current = null;
+        if (data.right.isPresent) {
+            const rightHit = performHitTest(data.right.indexPosition.x, data.right.indexPosition.y, data.cameraAspect);
+            if (rightHit) {
+                 if (rightHit.id !== lastRightHoverRef.current || data.right.isPinching) {
+                    handleInteraction(rightHit, 'RIGHT', data.right.isPinching);
+                    lastRightHoverRef.current = rightHit.id;
+                 }
+            } else {
+                lastRightHoverRef.current = null;
+            }
+        } else {
+             lastRightHoverRef.current = null;
         }
     }
 
-    // 3. Clap & Hold Logic (Only if not combined)
     if (!combinedElement && data.isClapping && !fusionErrorRef.current) {
         if (clapStartRef.current === 0) {
             clapStartRef.current = now;
@@ -285,13 +328,13 @@ const App: React.FC = () => {
         const duration = now - clapStartRef.current;
         if (duration > CLAP_DURATION_THRESHOLD) {
             checkCombination();
-            clapStartRef.current = 0; // Reset
+            clapStartRef.current = 0; 
         } else {
-             // Update UI with holding status (throttled slightly via React state, but acceptable)
-             if (message !== "HOLD TO FUSE...") setMessage("HOLD TO FUSE...");
+             if (!message.includes("WARNING")) {
+                if (message !== "HOLD TO FUSE...") setMessage("HOLD TO FUSE...");
+             }
         }
     } else {
-        // Reset timer if clap broken
         clapStartRef.current = 0;
         if (message === "HOLD TO FUSE...") setMessage("LAB READY");
     }

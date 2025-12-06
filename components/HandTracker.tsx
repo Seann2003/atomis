@@ -102,8 +102,8 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
       const videoAspect = videoRef.current ? (videoRef.current.videoWidth / videoRef.current.videoHeight) : 1.77;
 
       const trackingData: TrackingData = {
-        left: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.15, y: 0.5, z: 0}, indexPosition: {x: 0.15, y: 0.5, z: 0} },
-        right: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.85, y: 0.5, z: 0}, indexPosition: {x: 0.85, y: 0.5, z: 0} },
+        left: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.15, y: 0.5, z: 0}, indexPosition: {x: 0.15, y: 0.5, z: 0}, isPresent: false },
+        right: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.85, y: 0.5, z: 0}, indexPosition: {x: 0.85, y: 0.5, z: 0}, isPresent: false },
         isClapping: false,
         isResetGesture: false,
         isClosedFist: false,

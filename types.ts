@@ -23,9 +23,12 @@ export interface HandGestureState {
   position: { x: number; y: number; z: number }; // Palm Center
   indexPosition: { x: number; y: number; z: number }; // Index Tip
   isDetected?: boolean; // Whether hand is currently being tracked
+  isPresent: boolean; // Is the hand currently detected
 }
 
 export type Handedness = 'left' | 'right';
+
+export type GameState = 'playing' | 'dead';
 
 export interface TrackingData {
   left: HandGestureState;

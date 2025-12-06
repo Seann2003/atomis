@@ -2,11 +2,14 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import Scene from './components/Scene';
 import HandTracker from './components/HandTracker';
 import UIOverlay from './components/UIOverlay';
+import Dashboard from './components/Dashboard';
+import MascotGuide from './components/MascotGuide';
 import { ELEMENTS, COMBINATIONS } from './constants';
 import { TrackingData, ElementData, CatalystType } from './types';
 
 const App: React.FC = () => {
   const [isCameraReady, setIsCameraReady] = useState(false);
+  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
   
   // State stores the actual ElementData object now, not just index
   const [leftElement, setLeftElement] = useState<ElementData>(ELEMENTS[0]);
@@ -38,8 +41,8 @@ const App: React.FC = () => {
 
   // Refs for logic loop
   const trackingDataRef = useRef<TrackingData>({
-    left: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0} },
-    right: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0} },
+    left: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0}, isDetected: false },
+    right: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0}, isDetected: false },
     isClapping: false,
     isResetGesture: false,
     isClosedFist: false,
@@ -108,25 +111,51 @@ const App: React.FC = () => {
     }
 
     // Check all interactable elements (Shelf + Catalyst)
+    // Filtering based on mode (Dashboard vs Lab)
     const elements = document.querySelectorAll('.interactable-btn');
     for (let i = 0; i < elements.length; i++) {
-        const rect = elements[i].getBoundingClientRect();
+        const el = elements[i] as HTMLElement;
+        const rect = el.getBoundingClientRect();
+        
+        // If Dashboard is OPEN, ignore non-dashboard items
+        if (isDashboardOpen && !el.id.startsWith('dashboard-')) continue;
+        
+        // If Dashboard is CLOSED, ignore dashboard items
+        if (!isDashboardOpen && el.id.startsWith('dashboard-')) continue;
+
         if (screenX >= rect.left && screenX <= rect.right && screenY >= rect.top && screenY <= rect.bottom) {
-            return elements[i] as HTMLElement;
+            return el;
         }
     }
     return null;
   };
 
   const handleInteraction = useCallback((hit: HTMLElement, hand: 'LEFT' | 'RIGHT') => {
-      // 1. Catalyst Logic
+      // 1. Dashboard Logic
+      if (hit.id === 'dashboard-toggle') {
+          setIsDashboardOpen(true);
+          setMessage("DASHBOARD OPENED");
+          return;
+      }
+      if (hit.id === 'dashboard-close-btn') {
+          setIsDashboardOpen(false);
+          setMessage("LAB READY");
+          return;
+      }
+      if (hit.id.startsWith('dashboard-item-')) {
+           // Trigger click on the element to select it
+           hit.click();
+           return;
+      }
+
+      // 2. Catalyst Logic
       if (hit.id.startsWith('catalyst-btn-')) {
           const type = hit.dataset.type as CatalystType;
           // Toggle off if same, otherwise set new
           setActiveCatalyst(prev => prev === type ? 'none' : type);
           setMessage(`${type.toUpperCase()} CATALYST ACTIVE`);
       }
-      // 2. Shelf Logic
+      // 3. Shelf Logic
       else if (hit.id.startsWith('shelf-item-')) {
           const symbol = hit.dataset.symbol;
           
@@ -148,7 +177,7 @@ const App: React.FC = () => {
              setTimeout(() => setMessage("LAB READY"), 1000);
           }
       }
-  }, [savedElements]);
+  }, [savedElements, isDashboardOpen]);
 
   const onTrackingUpdate = useCallback((data: TrackingData) => {
     trackingDataRef.current = data;
@@ -224,7 +253,7 @@ const App: React.FC = () => {
         if (message === "HOLD TO FUSE...") setMessage("LAB READY");
     }
 
-  }, [combinedElement, message, checkCombination, handleInteraction]);
+  }, [combinedElement, message, checkCombination, handleInteraction, isDashboardOpen]);
 
   return (
     <div className="relative w-full h-full bg-black overflow-hidden select-none">
@@ -256,6 +285,18 @@ const App: React.FC = () => {
                 trackingRef={trackingDataRef}
                 activeCatalyst={activeCatalyst}
                 savedElements={savedElements}
+                isDashboardOpen={isDashboardOpen}
+                onToggleDashboard={() => setIsDashboardOpen(!isDashboardOpen)}
+            />
+            <Dashboard 
+               isOpen={isDashboardOpen}
+               onClose={() => setIsDashboardOpen(false)}
+               savedElements={savedElements}
+            />
+            <MascotGuide 
+               message={message}
+               isDashboardOpen={isDashboardOpen}
+               trackingData={trackingDataRef}
             />
         </>
       )}

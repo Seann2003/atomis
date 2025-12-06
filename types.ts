@@ -5,6 +5,7 @@ export interface ElementData {
   color: string;
   atomicNumber: number;
   description: string;
+  level?: number; // 1 = Base, 2 = Compound, 3 = Complex
 }
 
 export type CatalystType = 'none' | 'heat' | 'light' | 'chemical';
@@ -20,6 +21,7 @@ export interface HandGestureState {
   isPinching: boolean;
   isPointing: boolean; // Index finger up, others curled
   position: { x: number; y: number; z: number };
+  isDetected?: boolean;
 }
 
 export type Handedness = 'left' | 'right';

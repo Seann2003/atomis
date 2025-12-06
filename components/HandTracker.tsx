@@ -101,8 +101,8 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
       const videoAspect = videoRef.current ? (videoRef.current.videoWidth / videoRef.current.videoHeight) : 1.77;
 
       const trackingData: TrackingData = {
-        left: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.15, y: 0.5, z: 0} },
-        right: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.85, y: 0.5, z: 0} },
+        left: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.15, y: 0.5, z: 0}, isDetected: false },
+        right: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.85, y: 0.5, z: 0}, isDetected: false },
         isClapping: false,
         isResetGesture: false,
         isClosedFist: false,
@@ -134,12 +134,14 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
           }
 
           if (label === 'Right') { 
+             handState.isDetected = true;
              trackingData.left = handState;
              if (leftBuffer.current.detectCircle()) {
                 trackingData.isResetGesture = true;
                 leftBuffer.current.clear();
              }
           } else {
+             handState.isDetected = true;
              trackingData.right = handState;
              if (rightBuffer.current.detectCircle()) {
                 trackingData.isResetGesture = true;

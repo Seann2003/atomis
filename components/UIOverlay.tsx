@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import { ElementData, TrackingData, CatalystType } from '../types';
 import { ELEMENTS } from '../constants';
@@ -14,7 +15,7 @@ interface UIOverlayProps {
 
 // Icons
 const FlameIcon = () => (
-    <svg viewBox="0 0 24 24" fill="none" className="w-8 h-8" stroke="currentColor" strokeWidth="1.5">
+    <svg viewBox="0 0 24 24" fill="none" className="w-10 h-10" stroke="currentColor" strokeWidth="1.5">
         <path d="M12 22c4.97 0 9-4.03 9-9 0-4.97-9-13-9-13S3 8.03 3 13c0 4.97 4.03 9 9 9z" fill="currentColor" fillOpacity="0.2"/>
         <path d="M12 22c4.97 0 9-4.03 9-9 0-4.97-9-13-9-13S3 8.03 3 13c0 4.97 4.03 9 9 9z" strokeLinecap="round" strokeLinejoin="round"/>
         <path d="M12 18c2.21 0 4-1.79 4-4 0-2.21-4-6-4-6s-4 3.79-4 6c0 2.21 1.79 4 4 4z" strokeLinecap="round" strokeLinejoin="round"/>
@@ -22,14 +23,14 @@ const FlameIcon = () => (
 );
 
 const BoltIcon = () => (
-    <svg viewBox="0 0 24 24" fill="none" className="w-8 h-8" stroke="currentColor" strokeWidth="1.5">
+    <svg viewBox="0 0 24 24" fill="none" className="w-10 h-10" stroke="currentColor" strokeWidth="1.5">
         <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" fillOpacity="0.2"/>
         <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
 );
 
 const FlaskIcon = () => (
-    <svg viewBox="0 0 24 24" fill="none" className="w-8 h-8" stroke="currentColor" strokeWidth="1.5">
+    <svg viewBox="0 0 24 24" fill="none" className="w-10 h-10" stroke="currentColor" strokeWidth="1.5">
         <path d="M8.5 2h7M12 2v6M6 22h12a2 2 0 002-2l-3-9a6 6 0 00-6-3h-1a6 6 0 00-6 3l-3 9a2 2 0 002 2z" fill="currentColor" fillOpacity="0.2"/>
         <path d="M8.5 2h7M12 2v6M6 22h12a2 2 0 002-2l-3-9a6 6 0 00-6-3h-1a6 6 0 00-6 3l-3 9a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round"/>
         <circle cx="10" cy="16" r="1" fill="currentColor"/>
@@ -148,9 +149,10 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
     <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between">
       
       {/* --- TOP LAB SHELF --- */}
-      <div className="w-full pt-6 px-4 pointer-events-auto overflow-hidden">
-         <div className="mx-auto max-w-5xl overflow-x-auto pb-8 pt-4 no-scrollbar">
-            <div className="flex gap-4 px-4 min-w-max justify-center items-center">
+      <div className="w-full pt-6 pointer-events-auto overflow-hidden">
+         {/* Removed max-w constraint to show entire toolbox */}
+         <div className="w-full overflow-x-auto pb-8 pt-4 no-scrollbar">
+            <div className="flex gap-4 px-8 min-w-max justify-start items-center">
                 {displayElements.map((el) => {
                     const isLeft = leftElement.symbol === el.symbol;
                     const isRight = rightElement.symbol === el.symbol;
@@ -181,7 +183,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
       </div>
 
       {/* --- RIGHT CATALYST PANEL --- */}
-      <div className="absolute right-6 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 pointer-events-auto z-20">
+      <div className="absolute right-6 top-1/2 transform -translate-y-1/2 flex flex-col gap-6 pointer-events-auto z-20">
           <div className="text-[10px] text-white/50 font-mono tracking-widest uppercase text-center rotate-90 origin-right translate-x-4 mb-10">Catalysts</div>
           
           <div 
@@ -189,7 +191,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
             data-type="heat"
             data-active={activeCatalyst === 'heat'}
             data-activecolor="#ff4400"
-            className="interactable-btn w-16 h-16 rounded-2xl border flex items-center justify-center backdrop-blur-md transition-all duration-300"
+            className="interactable-btn w-24 h-24 rounded-2xl border-2 flex items-center justify-center backdrop-blur-md transition-all duration-300"
           >
             <FlameIcon />
           </div>
@@ -199,7 +201,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
             data-type="light"
             data-active={activeCatalyst === 'light'}
             data-activecolor="#ffff00"
-            className="interactable-btn w-16 h-16 rounded-2xl border flex items-center justify-center backdrop-blur-md transition-all duration-300"
+            className="interactable-btn w-24 h-24 rounded-2xl border-2 flex items-center justify-center backdrop-blur-md transition-all duration-300"
           >
             <BoltIcon />
           </div>
@@ -209,7 +211,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
             data-type="chemical"
             data-active={activeCatalyst === 'chemical'}
             data-activecolor="#00ff44"
-            className="interactable-btn w-16 h-16 rounded-2xl border flex items-center justify-center backdrop-blur-md transition-all duration-300"
+            className="interactable-btn w-24 h-24 rounded-2xl border-2 flex items-center justify-center backdrop-blur-md transition-all duration-300"
           >
             <FlaskIcon />
           </div>

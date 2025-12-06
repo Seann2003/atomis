@@ -57,7 +57,7 @@ const coreVertexShader = `
     vec4 s0 = floor(b0)*2.0 + 1.0;
     vec4 s1 = floor(b1)*2.0 + 1.0;
     vec4 sh = -step(h, vec4(0.0));
-    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+    vec4 a0 = b0.xzyw + s0.xzyw*sh.xzyw ;
     vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
     vec3 p0 = vec3(a0.xy,h.x);
     vec3 p1 = vec3(a0.zw,h.y);
@@ -145,7 +145,8 @@ const ringVertexShader = `
         vec3 pos = position;
         vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
         gl_Position = projectionMatrix * mvPosition;
-        gl_PointSize = (aSize * 30.0) / -mvPosition.z;
+        // INCREASED SIZE HERE: 30.0 -> 70.0
+        gl_PointSize = (aSize * 70.0) / -mvPosition.z; 
     }
 `;
 
@@ -179,7 +180,7 @@ const OrbitalRing: React.FC<{ radius: number, speed: number, axis: [number, numb
             pos[i * 3 + 1] = 0; 
             pos[i * 3 + 2] = radius * Math.sin(theta);
             
-            sz[i] = Math.random() * 0.5 + 0.5;
+            sz[i] = Math.random() * 0.5 + 0.8; // Slightly larger base size
             off[i] = Math.random() * Math.PI * 2;
         }
         return { positions: pos, sizes: sz, offsets: off };
@@ -218,8 +219,9 @@ const OrbitalRing: React.FC<{ radius: number, speed: number, axis: [number, numb
 
 const ParticleSphere: React.FC<ParticleSphereProps> = ({ element, scaleRef, opacityTarget }) => {
   const meshRef = useRef<THREE.Points>(null);
-  const coreCount = 800;
-  const shellCount = 1200;
+  // INCREASED PARTICLES FOR DENSER LOOK
+  const coreCount = 1500;
+  const shellCount = 2000;
   
   const uniforms = useMemo(() => ({
     uTime: { value: 0 },
@@ -238,7 +240,8 @@ const ParticleSphere: React.FC<ParticleSphereProps> = ({ element, scaleRef, opac
 
     // 1. Generate Core (Dense Sphere)
     for (let i = 0; i < coreCount; i++) {
-        const r = Math.pow(Math.random(), 3) * 0.6; // Compact
+        // REDUCED RADIUS (0.6 -> 0.5)
+        const r = Math.pow(Math.random(), 3) * 0.5; 
         const theta = Math.random() * Math.PI * 2;
         const phi = Math.acos((Math.random() * 2) - 1);
 
@@ -253,7 +256,8 @@ const ParticleSphere: React.FC<ParticleSphereProps> = ({ element, scaleRef, opac
 
     // 2. Generate Shell (Hollow Sphere surface)
     for (let i = coreCount; i < total; i++) {
-        const r = 1.2 + Math.random() * 0.2; // Fixed radius shell
+        // REDUCED RADIUS (1.2 -> 0.9)
+        const r = 0.9 + Math.random() * 0.2; 
         const theta = Math.random() * Math.PI * 2;
         const phi = Math.acos((Math.random() * 2) - 1);
 
@@ -319,12 +323,12 @@ const ParticleSphere: React.FC<ParticleSphereProps> = ({ element, scaleRef, opac
             />
         </points>
 
-        {/* Futuristic Orbital Particle Rings */}
+        {/* Futuristic Orbital Particle Rings (Decreased Radius for tighter fit) */}
         {opacityTarget > 0.1 && (
             <>
-                <OrbitalRing radius={2.0} speed={0.03} axis={[0.2, 1, 0.2]} color={element.color} opacity={opacityTarget * 0.8} />
-                <OrbitalRing radius={2.4} speed={0.04} axis={[1, 0.2, 0.2]} color={element.color} opacity={opacityTarget * 0.7} />
-                <OrbitalRing radius={2.8} speed={0.02} axis={[0.5, 0.5, 1]} color="#ffffff" opacity={opacityTarget * 0.5} />
+                <OrbitalRing radius={1.1} speed={0.03} axis={[0.2, 1, 0.2]} color={element.color} opacity={opacityTarget * 1.5} />
+                <OrbitalRing radius={1.3} speed={0.04} axis={[1, 0.2, 0.2]} color={element.color} opacity={opacityTarget * 1.3} />
+                <OrbitalRing radius={1.5} speed={0.02} axis={[0.5, 0.5, 1]} color="#ffffff" opacity={opacityTarget * 1.0} />
             </>
         )}
     </group>

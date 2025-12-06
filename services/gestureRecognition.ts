@@ -9,6 +9,7 @@ const INDEX_TIP = 8;
 const MIDDLE_MCP = 9;
 const MIDDLE_TIP = 12;
 const RING_TIP = 16;
+const PINKY_MCP = 17;
 const PINKY_TIP = 20;
 
 function distance(a: NormalizedLandmark, b: NormalizedLandmark) {
@@ -78,9 +79,9 @@ export function analyzeHand(landmarks: NormalizedLandmark[]): HandGestureState {
   const indexTip = landmarks[INDEX_TIP];
   const middleTip = landmarks[MIDDLE_TIP];
   const ringTip = landmarks[RING_TIP];
-  const pinkyTip = landmarks[PINKY_TIP];
-  const wrist = landmarks[WRIST];
   const indexMcp = landmarks[INDEX_MCP];
+  const pinkyMcp = landmarks[PINKY_MCP];
+  const wrist = landmarks[WRIST];
 
   // 1. Pinch Detection (Thumb tip to Index tip)
   const pinchDist = distance(thumbTip, indexTip);
@@ -92,21 +93,13 @@ export function analyzeHand(landmarks: NormalizedLandmark[]): HandGestureState {
   // 2. Pointing Detection (Index extended, others curled)
   const indexExt = distance(indexTip, wrist) > distance(indexMcp, wrist) * 1.5;
   const middleCurled = distance(middleTip, wrist) < distance(landmarks[MIDDLE_MCP], wrist) * 1.2;
-  const ringCurled = distance(ringTip, wrist) < distance(landmarks[0], wrist) * 0.8; // Rough check
-  
   const isPointing = indexExt && middleCurled && !isPinching;
 
-  // Calculate Cursor Position
-  // For interaction, we use the midpoint between thumb and index if pinching,
-  // or just index tip if pointing.
-  let cursorX, cursorY;
-  if (isPinching) {
-    cursorX = (thumbTip.x + indexTip.x) / 2;
-    cursorY = (thumbTip.y + indexTip.y) / 2;
-  } else {
-    cursorX = indexTip.x;
-    cursorY = indexTip.y;
-  }
+  // 3. Movement Tracking (PALM CENTER)
+  // We use the centroid of Wrist, Index Knuckle, and Pinky Knuckle to approximate the stable palm center.
+  // This ensures movement follows the hand body, not the fingers.
+  const palmX = (wrist.x + indexMcp.x + pinkyMcp.x) / 3;
+  const palmY = (wrist.y + indexMcp.y + pinkyMcp.y) / 3;
   
   const handZ = landmarks[0].z; 
 
@@ -114,6 +107,6 @@ export function analyzeHand(landmarks: NormalizedLandmark[]): HandGestureState {
     pinchDistance: normalizedPinch,
     isPinching,
     isPointing,
-    position: { x: cursorX, y: cursorY, z: handZ }
+    position: { x: palmX, y: palmY, z: handZ }
   };
 }

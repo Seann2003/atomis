@@ -7,8 +7,11 @@ import { TrackingData, ElementData, CatalystType } from './types';
 
 const App: React.FC = () => {
   const [isCameraReady, setIsCameraReady] = useState(false);
-  const [leftIndex, setLeftIndex] = useState(0);
-  const [rightIndex, setRightIndex] = useState(3);
+  
+  // State stores the actual ElementData object now, not just index
+  const [leftElement, setLeftElement] = useState<ElementData>(ELEMENTS[0]);
+  const [rightElement, setRightElement] = useState<ElementData>(ELEMENTS[3]); // Chlorine default
+  
   const [combinedElement, setCombinedElement] = useState<ElementData | null>(null);
   const [message, setMessage] = useState("LAB READY");
   const [activeCatalyst, setActiveCatalyst] = useState<CatalystType>('none');
@@ -22,7 +25,7 @@ const App: React.FC = () => {
 
   const saveElement = (element: ElementData) => {
       const history = JSON.parse(localStorage.getItem('chemLabHistory') || '[]');
-      // Avoid duplicates
+      // Avoid duplicates based on symbol
       if (!history.find((e: ElementData) => e.symbol === element.symbol)) {
           const newHistory = [element, ...history];
           localStorage.setItem('chemLabHistory', JSON.stringify(newHistory));
@@ -58,18 +61,13 @@ const App: React.FC = () => {
   const checkCombination = useCallback(() => {
     // If already combined, don't do anything
     if (combinedElement) return;
-
-    const leftEl = ELEMENTS[leftIndex] || savedElements.find(e => e.symbol === ELEMENTS[leftIndex]?.symbol) || ELEMENTS[0];
-    const rightEl = ELEMENTS[rightIndex] || savedElements.find(e => e.symbol === ELEMENTS[rightIndex]?.symbol) || ELEMENTS[0];
     
-    // We need to check against all available elements (including saved) for combinations
-    // But currently combinations are hardcoded in constants.ts. 
     // We assume saved elements behave like their base counterparts or we need to add dynamic combinations.
-    // For this demo, we check symbols.
+    // For this demo, we check symbols against the COMBINATIONS constant.
     
     const combo = COMBINATIONS.find(c => 
-      (c.elements[0] === leftEl.symbol && c.elements[1] === rightEl.symbol) ||
-      (c.elements[1] === leftEl.symbol && c.elements[0] === rightEl.symbol)
+      (c.elements[0] === leftElement.symbol && c.elements[1] === rightElement.symbol) ||
+      (c.elements[1] === leftElement.symbol && c.elements[0] === rightElement.symbol)
     );
 
     if (combo) {
@@ -87,7 +85,7 @@ const App: React.FC = () => {
       setMessage("Reaction Unstable: Incompatible");
       fusionErrorRef.current = true; // Set Error State
     }
-  }, [leftIndex, rightIndex, combinedElement, activeCatalyst, savedElements]);
+  }, [leftElement, rightElement, combinedElement, activeCatalyst]);
 
   // --- HIT TEST LOGIC ---
   const performHitTest = (nx: number, ny: number, cameraAspect: number): HTMLElement | null => {
@@ -131,40 +129,26 @@ const App: React.FC = () => {
       // 2. Shelf Logic
       else if (hit.id.startsWith('shelf-item-')) {
           const symbol = hit.dataset.symbol;
-          // Look up in both generic and saved elements
-          const allElements = [...savedElements, ...ELEMENTS];
-          const newIndex = allElements.findIndex(e => e.symbol === symbol);
           
-          if (newIndex !== -1) {
-             // NOTE: Because we merged arrays in UI, indices might be shifted relative to logic.
-             // We need to ensure logic uses the correct element data. 
-             // For simplicity, we just store the generic index for now, assuming standard ELEMENTS first.
-             // A more robust system would store the actual element object.
-             // Here we just map back to ELEMENTS array index if possible, or handle saved items differently.
-             
-             // Simpler approach for demo: Just update the index relative to ELEMENTS if it exists there, 
-             // otherwise we need a way to selecting "saved" items. 
-             // To keep it compatible with existing code:
-             const originalIndex = ELEMENTS.findIndex(e => e.symbol === symbol);
-             if (originalIndex !== -1) {
-                  if (hand === 'LEFT') setLeftIndex(originalIndex);
-                  else setRightIndex(originalIndex);
+          // Combine all available elements to find the selected one
+          const allElements = [...savedElements, ...ELEMENTS];
+          
+          // We find the first match. Note: Saved elements appear first in the UI list logic.
+          const selectedElement = allElements.find(e => e.symbol === symbol);
+          
+          if (selectedElement) {
+             if (hand === 'LEFT') {
+                 setLeftElement(selectedElement);
+                 setMessage("ELEMENT SWAPPED (LEFT)");
              } else {
-                 // It's a saved element (compound). 
-                 // Currently the logic relies on ELEMENTS[index]. 
-                 // We will skip selecting saved elements for fusion input in this version 
-                 // unless we refactor the whole state to store ElementData instead of indices.
-                 setMessage("CANNOT USE COMPOUND AS INPUT");
-                 return;
+                 setRightElement(selectedElement);
+                 setMessage("ELEMENT SWAPPED (RIGHT)");
              }
-             
-             if (hand === 'LEFT') setMessage("ELEMENT SWAPPED (LEFT)");
-             else setMessage("ELEMENT SWAPPED (RIGHT)");
              
              setTimeout(() => setMessage("LAB READY"), 1000);
           }
       }
-  }, [leftIndex, rightIndex, savedElements]);
+  }, [savedElements]);
 
   const onTrackingUpdate = useCallback((data: TrackingData) => {
     trackingDataRef.current = data;
@@ -180,7 +164,8 @@ const App: React.FC = () => {
             setTimeout(() => setMessage("LAB READY"), 2000);
         } else if (data.isResetGesture) {
             // Just reset if nothing to save
-            if (fusionErrorRef.current) {
+            if (fusionErrorRef.current || combinedElement) {
+                setCombinedElement(null);
                 fusionErrorRef.current = false;
                 setMessage("LAB READY");
             }
@@ -239,7 +224,7 @@ const App: React.FC = () => {
         if (message === "HOLD TO FUSE...") setMessage("LAB READY");
     }
 
-  }, [combinedElement, message, checkCombination, leftIndex, rightIndex, handleInteraction]);
+  }, [combinedElement, message, checkCombination, handleInteraction]);
 
   return (
     <div className="relative w-full h-full bg-black overflow-hidden select-none">
@@ -257,15 +242,15 @@ const App: React.FC = () => {
       {isCameraReady && (
         <>
             <Scene 
-                leftElement={ELEMENTS[leftIndex]} 
-                rightElement={ELEMENTS[rightIndex]} 
+                leftElement={leftElement} 
+                rightElement={rightElement} 
                 combinedElement={combinedElement}
                 trackingData={trackingDataRef}
                 activeCatalyst={activeCatalyst}
             />
             <UIOverlay 
-                leftElement={ELEMENTS[leftIndex]} 
-                rightElement={ELEMENTS[rightIndex]} 
+                leftElement={leftElement} 
+                rightElement={rightElement} 
                 combinedElement={combinedElement}
                 message={message}
                 trackingRef={trackingDataRef}

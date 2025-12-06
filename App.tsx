@@ -1,4 +1,6 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../convex/_generated/api';
 import Scene from './components/Scene';
 import HandTracker from './components/HandTracker';
 import UIOverlay from './components/UIOverlay';
@@ -15,22 +17,32 @@ const App: React.FC = () => {
   const [combinedElement, setCombinedElement] = useState<ElementData | null>(null);
   const [message, setMessage] = useState("LAB READY");
   const [activeCatalyst, setActiveCatalyst] = useState<CatalystType>('none');
-  const [savedElements, setSavedElements] = useState<ElementData[]>([]);
+  
+  // Convex hooks for saved elements
+  const savedElementsFromDB = useQuery(api.elements.getAllSavedElements) || [];
+  const saveElementMutation = useMutation(api.elements.saveElement);
+  
+  // Convert Convex documents to ElementData format
+  const savedElements: ElementData[] = savedElementsFromDB.map(doc => ({
+    symbol: doc.symbol,
+    name: doc.name,
+    color: doc.color,
+    atomicNumber: doc.atomicNumber,
+    description: doc.description,
+  }));
 
-  // Load saved history on mount
-  useEffect(() => {
-    const history = JSON.parse(localStorage.getItem('chemLabHistory') || '[]');
-    setSavedElements(history);
-  }, []);
-
-  const saveElement = (element: ElementData) => {
-      const history = JSON.parse(localStorage.getItem('chemLabHistory') || '[]');
-      // Avoid duplicates based on symbol
-      if (!history.find((e: ElementData) => e.symbol === element.symbol)) {
-          const newHistory = [element, ...history];
-          localStorage.setItem('chemLabHistory', JSON.stringify(newHistory));
-          setSavedElements(newHistory);
-      }
+  const saveElement = async (element: ElementData) => {
+    try {
+      await saveElementMutation({
+        symbol: element.symbol,
+        name: element.name,
+        color: element.color,
+        atomicNumber: element.atomicNumber,
+        description: element.description,
+      });
+    } catch (error) {
+      console.error('Failed to save element:', error);
+    }
   };
 
   // Error State Ref (for update loop access)

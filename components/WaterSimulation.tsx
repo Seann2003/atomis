@@ -1,8 +1,7 @@
-
-import React, { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
-import { TrackingData } from '../types';
+import React, { useRef, useMemo } from "react";
+import { useFrame } from "@react-three/fiber";
+import * as THREE from "three";
+import { TrackingData } from "../types";
 
 interface WaterSimulationProps {
   trackingRef: React.MutableRefObject<TrackingData>;
@@ -20,6 +19,7 @@ varying vec2 vUv;
 varying vec3 vNormal;
 varying vec3 vViewPosition;
 varying float vDisplacement;
+varying float vThickness;
 
 // Simplex 3D Noise 
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -76,32 +76,37 @@ void main() {
   vUv = uv;
   vec3 pos = position;
 
-  // 1. Organic Boiling Noise
-  float noiseFreq = 0.8 + (uTension * 2.0); // Tension increases frequency
-  float noiseAmp = 0.3 + (uTension * 0.5);  // Tension increases amplitude
-  float noise = snoise(pos * noiseFreq + uTime * (0.5 + uTension));
+  // Very subtle surface texture - smooth bubble with minimal distortion
+  float noiseFreq = 3.0; // Higher frequency for finer, smoother detail
+  float noiseAmp = 0.01;  // Very small amplitude for smooth surface
+  float noise = snoise(pos * noiseFreq + uTime * 0.15);
   
-  // 2. Hand Interaction (Repel/Attract)
-  // Calculate distance to hands (Mapped to local space approx)
+  // Hand Interaction (very subtle bulge)
   float dLeft = distance(pos, uHandLeft);
   float dRight = distance(pos, uHandRight);
   
   float interaction = 0.0;
-  // If hand is close, create a bulge
-  interaction += smoothstep(3.0, 0.0, dLeft) * 1.5; 
-  interaction += smoothstep(3.0, 0.0, dRight) * 1.5;
+  interaction += smoothstep(3.0, 0.0, dLeft) * 0.08; 
+  interaction += smoothstep(3.0, 0.0, dRight) * 0.08;
 
-  // Apply displacement along normal
-  float totalDisp = noise * noiseAmp + interaction;
+  // Very subtle gravity effect - barely noticeable
+  float gravityEffect = smoothstep(0.5, -0.5, pos.y) * 0.02;
+
+  // Minimal displacement for smooth bubble surface
+  float totalDisp = noise * noiseAmp + interaction + gravityEffect;
   vec3 newPos = pos + normal * totalDisp;
 
   vDisplacement = totalDisp;
+  
+  // Calculate thickness for bubble effect (thinner at top, thicker at bottom)
+  vThickness = 0.3 + (1.0 - smoothstep(-0.3, 0.3, pos.y)) * 0.2;
   
   vec4 mvPosition = modelViewMatrix * vec4(newPos, 1.0);
   vViewPosition = -mvPosition.xyz;
   gl_Position = projectionMatrix * mvPosition;
   
-  vNormal = normalize(normalMatrix * (normal + totalDisp * 0.2)); 
+  // Use original normal with minimal distortion
+  vNormal = normalize(normalMatrix * normal); 
 }
 `;
 
@@ -110,6 +115,7 @@ uniform float uTime;
 varying vec3 vNormal;
 varying vec3 vViewPosition;
 varying float vDisplacement;
+varying float vThickness;
 
 void main() {
   vec3 dx = dFdx(vViewPosition);
@@ -123,122 +129,175 @@ void main() {
   float NdotL = max(dot(normal, lightDir), 0.0);
   float NdotH = max(dot(normal, halfDir), 0.0);
   
-  float specular = pow(NdotH, 60.0); 
-  float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0);
+  // Strong specular highlight for bubble
+  float specular = pow(NdotH, 120.0) * 2.0; 
   
-  // Single layer depth simulation
-  vec3 deepColor = vec3(0.0, 0.1, 0.4);
-  vec3 shallowColor = vec3(0.0, 0.6, 1.0);
+  // Fresnel effect - stronger at edges (bubble rim)
+  float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.0);
   
-  // Mix based on displacement (fake depth)
-  vec3 albedo = mix(deepColor, shallowColor, 0.5 + (vDisplacement * 0.3));
+  // Water bubble colors - cyan/blue with transparency
+  vec3 waterColor = vec3(0.2, 0.6, 0.9);
+  vec3 rimColor = vec3(0.4, 0.8, 1.0);
   
-  // Final Composition
-  vec3 finalColor = albedo + (specular * vec3(1.0)) + (fresnel * vec3(0.4, 0.8, 1.0));
+  // Mix based on fresnel (edges are brighter)
+  vec3 albedo = mix(waterColor, rimColor, fresnel * 0.5);
   
-  gl_FragColor = vec4(finalColor, 0.95); 
+  // Add caustics-like effect
+  float caustics = sin(vViewPosition.x * 10.0 + uTime * 2.0) * 
+                   sin(vViewPosition.y * 10.0 + uTime * 2.0) * 0.1 + 0.9;
+  
+  // Final Composition - bubble appearance
+  vec3 finalColor = albedo * caustics + (specular * vec3(1.0)) + (fresnel * vec3(0.3, 0.7, 1.0) * 0.5);
+  
+  // Transparency - more transparent in center, more opaque at edges
+  float alpha = 0.3 + fresnel * 0.4;
+  
+  gl_FragColor = vec4(finalColor, alpha); 
 }
 `;
 
 const WaterSimulation: React.FC<WaterSimulationProps> = ({ trackingRef }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const dropletsRef = useRef<THREE.InstancedMesh>(null);
-  
-  // Droplet State
-  const dropletCount = 60;
+
+  // Dripping droplets at bottom
+  const dropletCount = 40;
   const dropletData = useMemo(() => {
-    return new Array(dropletCount).fill(0).map(() => ({
-      position: new THREE.Vector3(
-        (Math.random() - 0.5) * 2, // Shrink range
-        (Math.random() - 0.5) * 2,
-        (Math.random() - 0.5) * 2
-      ),
-      velocity: Math.random() * 0.1 + 0.05,
-      scale: Math.random() * 0.3 + 0.1 // Smaller droplets
-    }));
+    return new Array(dropletCount).fill(0).map(() => {
+      // Start droplets at bottom of bubble
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 1.2 + Math.random() * 0.1;
+      const startY = -1.0 - Math.random() * 0.5; // Start below bubble
+
+      return {
+        position: new THREE.Vector3(
+          Math.cos(angle) * radius * 0.3, // Concentrate at bottom
+          startY,
+          Math.sin(angle) * radius * 0.3
+        ),
+        velocity: Math.random() * 0.08 + 0.03,
+        scale: Math.random() * 0.15 + 0.08,
+        angle: angle,
+        radius: radius,
+        phase: Math.random() * Math.PI * 2, // Random phase for staggered dripping
+      };
+    });
   }, []);
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
-  const uniforms = useMemo(() => ({
-    uTime: { value: 0 },
-    uTension: { value: 0 },
-    uHandLeft: { value: new THREE.Vector3(-10, -10, -10) },
-    uHandRight: { value: new THREE.Vector3(10, 10, 10) }
-  }), []);
+  const uniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uTension: { value: 0 },
+      uHandLeft: { value: new THREE.Vector3(-10, -10, -10) },
+      uHandRight: { value: new THREE.Vector3(10, 10, 10) },
+    }),
+    []
+  );
 
   useFrame((state) => {
     const t = state.clock.getElapsedTime();
     const data = trackingRef.current;
-    
+
     // Update Main Water Sphere
     if (meshRef.current) {
-        const mat = meshRef.current.material as THREE.ShaderMaterial;
-        mat.uniforms.uTime.value = t;
-        
-        // Map Tension
-        const avgTension = (data.left.pinchDistance + data.right.pinchDistance) / 2;
-        mat.uniforms.uTension.value = THREE.MathUtils.lerp(mat.uniforms.uTension.value, avgTension, 0.1);
+      const mat = meshRef.current.material as THREE.ShaderMaterial;
+      mat.uniforms.uTime.value = t;
 
-        // Map Hands 
-        const mapX = (x: number) => (x - 0.5) * 18;
-        const mapY = (y: number) => -(y - 0.5) * 10;
-        
-        const lx = mapX(data.left.position.x);
-        const ly = mapY(data.left.position.y);
-        const rx = mapX(data.right.position.x);
-        const ry = mapY(data.right.position.y);
+      // Map Tension
+      const avgTension =
+        (data.left.pinchDistance + data.right.pinchDistance) / 2;
+      mat.uniforms.uTension.value = THREE.MathUtils.lerp(
+        mat.uniforms.uTension.value,
+        avgTension,
+        0.1
+      );
 
-        mat.uniforms.uHandLeft.value.set(lx, ly, 0);
-        mat.uniforms.uHandRight.value.set(rx, ry, 0);
-        
-        meshRef.current.rotation.y = t * 0.1;
-        meshRef.current.rotation.z = Math.sin(t * 0.2) * 0.1;
+      // Map Hands
+      const mapX = (x: number) => (x - 0.5) * 18;
+      const mapY = (y: number) => -(y - 0.5) * 10;
+
+      const lx = mapX(data.left.position.x);
+      const ly = mapY(data.left.position.y);
+      const rx = mapX(data.right.position.x);
+      const ry = mapY(data.right.position.y);
+
+      mat.uniforms.uHandLeft.value.set(lx, ly, 0);
+      mat.uniforms.uHandRight.value.set(rx, ry, 0);
+
+      meshRef.current.rotation.y = t * 0.1;
+      meshRef.current.rotation.z = Math.sin(t * 0.2) * 0.1;
     }
 
-    // Update Droplets
+    // Update Dripping Droplets
     if (dropletsRef.current) {
-        dropletData.forEach((d, i) => {
-            d.position.y -= d.velocity;
-            if (d.position.y < -3) {
-                d.position.y = 1 + Math.random() * 1;
-                d.position.x = (Math.random() - 0.5) * 2;
-                d.position.z = (Math.random() - 0.5) * 2;
-            }
-            dummy.position.copy(d.position);
-            dummy.scale.setScalar(d.scale);
-            dummy.updateMatrix();
-            dropletsRef.current!.setMatrixAt(i, dummy.matrix);
-        });
-        dropletsRef.current.instanceMatrix.needsUpdate = true;
+      dropletData.forEach((d, i) => {
+        // Only start dripping after phase delay
+        const dripTime = t + d.phase;
+        if (dripTime > 1.0) {
+          // Droplet falls down
+          d.position.y -= d.velocity;
+
+          // Slight horizontal drift
+          d.position.x += Math.sin(t * 2.0 + d.phase) * 0.01;
+          d.position.z += Math.cos(t * 2.0 + d.phase) * 0.01;
+
+          // Reset when it falls too far
+          if (d.position.y < -2.5) {
+            // Reset to bottom of bubble with new random phase
+            const angle = Math.random() * Math.PI * 2;
+            d.position.x = Math.cos(angle) * d.radius * 0.3;
+            d.position.y = -1.0 - Math.random() * 0.3;
+            d.position.z = Math.sin(angle) * d.radius * 0.3;
+            d.phase = Math.random() * Math.PI * 2;
+          }
+        } else {
+          // Still attached to bubble bottom
+          const angle = d.angle + Math.sin(t * 0.5) * 0.1;
+          d.position.x = Math.cos(angle) * d.radius * 0.3;
+          d.position.z = Math.sin(angle) * d.radius * 0.3;
+        }
+
+        dummy.position.copy(d.position);
+        dummy.scale.setScalar(d.scale);
+        dummy.updateMatrix();
+        dropletsRef.current!.setMatrixAt(i, dummy.matrix);
+      });
+      dropletsRef.current.instanceMatrix.needsUpdate = true;
     }
   });
 
   return (
     <group>
-        {/* Main Water Surface - Single Mesh Layer */}
-        <mesh ref={meshRef}>
-            <icosahedronGeometry args={[1.3, 64]} />
-            <shaderMaterial
-                vertexShader={waterVertexShader}
-                fragmentShader={waterFragmentShader}
-                uniforms={uniforms}
-                transparent
-            />
-        </mesh>
+      {/* Main Water Bubble - Spherical */}
+      <mesh ref={meshRef}>
+        <sphereGeometry args={[1.2, 64, 64]} />
+        <shaderMaterial
+          vertexShader={waterVertexShader}
+          fragmentShader={waterFragmentShader}
+          uniforms={uniforms}
+          transparent
+          side={THREE.DoubleSide}
+        />
+      </mesh>
 
-        {/* Falling Droplets */}
-        <instancedMesh ref={dropletsRef} args={[undefined, undefined, dropletCount]}>
-            <icosahedronGeometry args={[0.08, 1]} />
-            <meshPhysicalMaterial 
-                color="#88ccff"
-                transmission={0.9}
-                opacity={1}
-                transparent
-                roughness={0}
-                ior={1.33}
-                thickness={0.5}
-            />
-        </instancedMesh>
+      {/* Dripping Water Droplets at Bottom */}
+      <instancedMesh
+        ref={dropletsRef}
+        args={[undefined, undefined, dropletCount]}
+      >
+        <sphereGeometry args={[0.06, 8, 8]} />
+        <meshPhysicalMaterial
+          color="#4da6ff"
+          transmission={0.95}
+          opacity={0.9}
+          transparent
+          roughness={0.1}
+          ior={1.33}
+          thickness={0.3}
+          metalness={0.1}
+        />
+      </instancedMesh>
     </group>
   );
 };

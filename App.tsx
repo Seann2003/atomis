@@ -662,6 +662,7 @@ const App: React.FC = () => {
                message={message}
                isDashboardOpen={isDashboardOpen}
                trackingData={trackingDataRef}
+               combinedElement={combinedElement}
             />
         </>
       )}

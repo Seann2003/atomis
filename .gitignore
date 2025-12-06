@@ -1,3 +1,4 @@
 .env
 .vite   
 node_modules
+.next/

@@ -79,29 +79,31 @@ export function analyzeHand(landmarks: NormalizedLandmark[]): HandGestureState {
   const indexMcp = landmarks[INDEX_MCP];
   const wrist = landmarks[WRIST];
 
-  // 1. Pinch Detection (Thumb tip to Index tip)
+  // 1. Pinch Detection (Click Gesture)
+  // Distance between Thumb Tip and Index Tip
   const pinchDist = distance(thumbTip, indexTip);
   
-  // Adjusted Threshold: 0.12 for easier click detection
-  const isPinching = pinchDist < 0.12;
+  // Threshold: 0.15 makes clicking easier/forgiving
+  const isPinching = pinchDist < 0.15;
 
-  // Normalize pinch
+  // Normalize pinch for animation (optional)
   const normalizedPinch = Math.max(0, Math.min(1, (pinchDist - 0.02) / 0.20));
 
-  // 2. Pointing Detection (Index extended, others curled logic moved to simpler checks)
+  // 2. Pointing Detection
   const indexExt = distance(indexTip, wrist) > distance(indexMcp, wrist) * 1.5;
   const isPointing = indexExt && !isPinching;
 
-  // 3. Movement Tracking (INDEX TIP)
-  const pointerX = indexTip.x;
-  const pointerY = indexTip.y;
-  
-  const handZ = landmarks[0].z; 
+  // 3. Movement Tracking (PALM CENTROID)
+  // Averaging Wrist, Index Knuckle, and Pinky Knuckle gives a very stable center point
+  const palmX = (landmarks[WRIST].x + landmarks[INDEX_MCP].x + landmarks[PINKY_MCP].x) / 3;
+  const palmY = (landmarks[WRIST].y + landmarks[INDEX_MCP].y + landmarks[PINKY_MCP].y) / 3;
+  const palmZ = (landmarks[WRIST].z + landmarks[INDEX_MCP].z + landmarks[PINKY_MCP].z) / 3;
 
   return {
     pinchDistance: normalizedPinch,
     isPinching,
     isPointing,
-    position: { x: pointerX, y: pointerY, z: handZ }
+    position: { x: palmX, y: palmY, z: palmZ },
+    indexPosition: { x: indexTip.x, y: indexTip.y, z: indexTip.z }
   };
 }

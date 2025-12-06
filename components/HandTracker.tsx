@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { FilesetResolver, HandLandmarker, HandLandmarkerResult } from '@mediapipe/tasks-vision';
 import { analyzeHand, GestureBuffer, detectClosedFist } from '../services/gestureRecognition';
@@ -101,8 +102,8 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
       const videoAspect = videoRef.current ? (videoRef.current.videoWidth / videoRef.current.videoHeight) : 1.77;
 
       const trackingData: TrackingData = {
-        left: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.15, y: 0.5, z: 0}, isDetected: false },
-        right: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.85, y: 0.5, z: 0}, isDetected: false },
+        left: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.15, y: 0.5, z: 0}, indexPosition: {x: 0.15, y: 0.5, z: 0} },
+        right: { pinchDistance: 0.0, isPinching: false, isPointing: false, position: {x: 0.85, y: 0.5, z: 0}, indexPosition: {x: 0.85, y: 0.5, z: 0} },
         isClapping: false,
         isResetGesture: false,
         isClosedFist: false,
@@ -119,15 +120,17 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
           const label = h[0].categoryName;
           
           const handState = analyzeHand(landmarks);
-          handState.position.x = 1 - handState.position.x; // Mirror Inversion
+          // Mirror Inversion for both positions
+          handState.position.x = 1 - handState.position.x;
+          handState.indexPosition.x = 1 - handState.indexPosition.x;
 
           const isFist = detectClosedFist(landmarks);
           if (isFist) detectedFist = true;
 
-          // Logic for Circular Reset Gesture
+          // Logic for Circular Reset Gesture using Index Position now for better circular tracking
           if (handState.isPointing) {
-            if (label === 'Right') leftBuffer.current.addPoint(handState.position.x, handState.position.y);
-            else rightBuffer.current.addPoint(handState.position.x, handState.position.y);
+            if (label === 'Right') leftBuffer.current.addPoint(handState.indexPosition.x, handState.indexPosition.y);
+            else rightBuffer.current.addPoint(handState.indexPosition.x, handState.indexPosition.y);
           } else {
              if (label === 'Right') leftBuffer.current.clear();
              else rightBuffer.current.clear();

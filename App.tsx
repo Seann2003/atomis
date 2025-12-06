@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import Scene from './components/Scene';
 import HandTracker from './components/HandTracker';
@@ -41,8 +42,8 @@ const App: React.FC = () => {
 
   // Refs for logic loop
   const trackingDataRef = useRef<TrackingData>({
-    left: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0}, isDetected: false },
-    right: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0}, isDetected: false },
+    left: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0}, indexPosition: {x: 0, y: 0, z: 0} },
+    right: { pinchDistance: 0.5, isPinching: false, isPointing: false, position: {x: 0, y: 0, z: 0}, indexPosition: {x: 0, y: 0, z: 0} },
     isClapping: false,
     isResetGesture: false,
     isClosedFist: false,
@@ -50,9 +51,9 @@ const App: React.FC = () => {
     cameraAspect: 1.77
   });
 
-  // Previous frame pinch state (for detecting rising edge/click)
-  const lastLeftPinch = useRef(false);
-  const lastRightPinch = useRef(false);
+  // Track hover state to avoid rapid toggling/re-setting state
+  const lastLeftHoverRef = useRef<string | null>(null);
+  const lastRightHoverRef = useRef<string | null>(null);
 
   const clapStartRef = useRef<number>(0);
   const CLAP_DURATION_THRESHOLD = 800; // ms to hold clap
@@ -90,7 +91,7 @@ const App: React.FC = () => {
     }
   }, [leftElement, rightElement, combinedElement, activeCatalyst]);
 
-  // --- HIT TEST LOGIC ---
+  // --- HIT TEST LOGIC (Using Index Finger for Aiming) ---
   const performHitTest = (nx: number, ny: number, cameraAspect: number): HTMLElement | null => {
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
@@ -212,26 +213,28 @@ const App: React.FC = () => {
         return;
     }
 
-    // 2. Pinch Selection Logic (Rising Edge Detection - Click)
+    // 2. HOVER SELECTION LOGIC (Instant Switch)
     // Only if not combined
     if (!combinedElement && !fusionErrorRef.current) {
         
         // --- LEFT HAND ---
-        if (data.left.isPinching && !lastLeftPinch.current) {
-            const hit = performHitTest(data.left.position.x, data.left.position.y, data.cameraAspect);
-            if (hit) handleInteraction(hit, 'LEFT');
+        const leftHit = performHitTest(data.left.indexPosition.x, data.left.indexPosition.y, data.cameraAspect);
+        if (leftHit && leftHit.id !== lastLeftHoverRef.current) {
+            handleInteraction(leftHit, 'LEFT');
+            lastLeftHoverRef.current = leftHit.id;
+        } else if (!leftHit) {
+            lastLeftHoverRef.current = null;
         }
         
         // --- RIGHT HAND ---
-        if (data.right.isPinching && !lastRightPinch.current) {
-            const hit = performHitTest(data.right.position.x, data.right.position.y, data.cameraAspect);
-            if (hit) handleInteraction(hit, 'RIGHT');
+        const rightHit = performHitTest(data.right.indexPosition.x, data.right.indexPosition.y, data.cameraAspect);
+        if (rightHit && rightHit.id !== lastRightHoverRef.current) {
+            handleInteraction(rightHit, 'RIGHT');
+            lastRightHoverRef.current = rightHit.id;
+        } else if (!rightHit) {
+            lastRightHoverRef.current = null;
         }
     }
-
-    // Update previous pinch states
-    lastLeftPinch.current = data.left.isPinching;
-    lastRightPinch.current = data.right.isPinching;
 
     // 3. Clap & Hold Logic (Only if not combined)
     if (!combinedElement && data.isClapping && !fusionErrorRef.current) {

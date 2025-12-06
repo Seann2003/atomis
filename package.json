@@ -1,0 +1,28 @@
+{
+  "name": "elemental-particles-3d",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react-dom": "^19.2.1",
+    "react": "^19.2.1",
+    "lucide-react": "^0.556.0",
+    "@google/genai": "^1.31.0",
+    "@react-three/fiber": "^9.4.2",
+    "@react-three/drei": "^10.7.7",
+    "@mediapipe/tasks-vision": "^0.10.22-rc.20250304",
+    "zustand": "^5.0.9",
+    "three": "^0.181.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Elemental Particles 3D",
+  "description": "Interactive 3D particle system controlled by hand gestures, featuring elemental themes and Gemini-powered insights.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

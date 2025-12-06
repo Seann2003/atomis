@@ -1,138 +1,92 @@
-import React from "react";
-import { useAppStore } from "../store";
-import { ElementType, ShapeTemplate, ELEMENT_CONFIGS } from "../types";
-import { getElementInsight } from "../services/geminiService";
-import {
-  Atom,
-  Heart,
-  Flower,
-  Zap,
-  Rocket,
-  Sparkles,
-  AlertCircle,
-} from "lucide-react";
+import React from 'react';
+import { ElementData } from '../types';
 
-const UIOverlay: React.FC = () => {
-  const {
-    selectedElement,
-    selectedTemplate,
-    customColor,
-    aiInsight,
-    isLoadingInsight,
-    setElement,
-    setTemplate,
-    setCustomColor,
-    setAiInsight,
-    setLoadingInsight,
-  } = useAppStore();
+interface UIOverlayProps {
+  leftElement: ElementData;
+  rightElement: ElementData;
+  combinedElement: ElementData | null;
+  message: string;
+}
 
-  const handleElementChange = (el: ElementType) => {
-    setElement(el);
-    setCustomColor(ELEMENT_CONFIGS[el].color);
-    setAiInsight("Ask AI to learn more about this element!");
-  };
-
+const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combinedElement, message }) => {
   return (
-    <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-6 z-10">
+    <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-6 md:p-10">
       {/* Header */}
-      <div className="pointer-events-auto flex justify-between items-start">
-        <div className="bg-black/30 backdrop-blur-md p-4 rounded-xl border border-white/10 max-w-md">
-          <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
-            Elemental Particles
+      <div className="flex justify-between items-start">
+        <div className="backdrop-blur-sm bg-black/20 p-2 rounded-br-2xl border-l-2 border-t-2 border-white/10">
+          <h1 className="text-2xl md:text-4xl font-['Orbitron'] font-bold text-white tracking-widest uppercase">
+            Chemi<span className="text-cyan-400">Particles</span>
           </h1>
-          <p className="text-sm text-gray-300 mt-1">
-            Use your hands to control the universe. <br />
-            <span className="text-xs text-gray-500">
-              Pinch/Fist = Tension | Distance = Expansion
-            </span>
+          <p className="text-cyan-400/70 font-mono text-[10px] tracking-[0.3em]">
+            INTERACTIVE MOLECULAR SYNTHESIS
           </p>
+        </div>
+        
+        {/* Status */}
+        <div className="flex items-center gap-3">
+             <div className="bg-black/50 backdrop-blur border border-white/10 px-4 py-2 rounded-lg flex items-center">
+                <span className={`w-2 h-2 rounded-full mr-3 ${message.includes("Synthesizing") || message.includes("FUSION") ? "bg-purple-400 animate-ping" : "bg-green-500 animate-pulse"}`}></span>
+                <span className="text-xs font-mono text-white/80 uppercase tracking-wider">{message}</span>
+            </div>
         </div>
       </div>
 
-      {/* Main Controls Panel */}
-      <div className="pointer-events-auto bg-black/40 backdrop-blur-xl p-6 rounded-2xl border border-white/10 w-full max-w-sm self-end mb-4">
-        {/* Element Selection */}
-        <div className="mb-6">
-          <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 block">
-            Select Element
-          </label>
-          <div className="flex gap-2">
-            {Object.values(ElementType).map((el) => (
-              <button
-                key={el}
-                onClick={() => handleElementChange(el)}
-                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
-                  selectedElement === el
-                    ? "bg-white/20 text-white shadow-lg shadow-blue-500/20"
-                    : "bg-black/20 text-gray-400 hover:bg-white/10"
-                }`}
-              >
-                {el}
-              </button>
-            ))}
-          </div>
+      {/* Center Synthesis Message - Only show if combined is active */}
+      {combinedElement && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center w-full z-20">
+            <div className="relative inline-block animate-pulse">
+                <h2 className="relative text-6xl md:text-8xl font-['Orbitron'] font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-cyan-400 tracking-tighter drop-shadow-[0_0_30px_rgba(0,255,255,0.6)]">
+                    {combinedElement.symbol}
+                </h2>
+            </div>
+            <div className="mt-4 text-xl font-mono text-cyan-200 tracking-[0.5em] uppercase">
+                {combinedElement.name}
+            </div>
         </div>
+      )}
 
-        {/* Template Selection */}
-        <div className="mb-6">
-          <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 block">
-            Particle Template
-          </label>
-          <div className="grid grid-cols-5 gap-2">
-            {[
-              { t: ShapeTemplate.ATOM, i: <Atom size={18} /> },
-              { t: ShapeTemplate.HEART, i: <Heart size={18} /> },
-              { t: ShapeTemplate.FLOWER, i: <Flower size={18} /> },
-              { t: ShapeTemplate.SATURN, i: <Zap size={18} /> }, // Using Zap for Saturn/Energy
-              { t: ShapeTemplate.FIREWORKS, i: <Rocket size={18} /> },
-            ].map(({ t, i }) => (
-              <button
-                key={t}
-                onClick={() => setTemplate(t)}
-                title={t}
-                className={`flex items-center justify-center aspect-square rounded-lg transition-all ${
-                  selectedTemplate === t
-                    ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white scale-105"
-                    : "bg-white/5 text-gray-400 hover:bg-white/10"
-                }`}
-              >
-                {i}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Color & AI */}
-        <div className="flex items-center gap-4 mb-2">
-          <div className="flex-1">
-            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">
-              Color
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={customColor}
-                onChange={(e) => setCustomColor(e.target.value)}
-                className="w-8 h-8 rounded cursor-pointer border-none bg-transparent"
-              />
-              <span className="text-xs font-mono text-gray-300">
-                {customColor}
-              </span>
+      {/* Footer Controls - Fade out when combined */}
+      <div className={`grid grid-cols-2 gap-8 items-end transition-opacity duration-500 ${combinedElement ? 'opacity-0' : 'opacity-100'}`}>
+        {/* Left Control */}
+        <div className="text-left group">
+          <div className="inline-block bg-black/70 backdrop-blur-md p-6 rounded-tr-3xl border-l-4 border-cyan-500 transition-all group-hover:bg-black/80">
+            <div className="text-cyan-400 text-xs font-bold font-['Orbitron'] mb-3 flex items-center tracking-widest">
+              LEFT ELEMENT
+            </div>
+            <div className="text-3xl font-bold text-white font-['Orbitron'] mb-1">{leftElement.symbol}</div>
+            <div className="text-sm font-mono text-gray-400 mb-4">{leftElement.name}</div>
+            
+            <div className="space-y-1 text-[10px] font-mono text-gray-500 border-t border-white/10 pt-3">
+               <div className="flex items-center"><span className="w-1 h-1 bg-cyan-500 rounded-full mr-2"></span>PINCH TO EXPAND</div>
+               <div className="flex items-center"><span className="w-1 h-1 bg-cyan-500 rounded-full mr-2"></span>PINKY EXTEND: NEXT</div>
             </div>
           </div>
         </div>
 
-        {/* AI Insight Box */}
-        <div className="mt-4 p-3 bg-white/5 rounded-lg border border-white/5 relative overflow-hidden min-h-[60px] flex items-center">
-          <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500/50"></div>
-          <p className="text-sm text-gray-200 pl-2 leading-snug">{aiInsight}</p>
+        {/* Right Control */}
+        <div className="text-right flex flex-col items-end group">
+           <div className="inline-block bg-black/70 backdrop-blur-md p-6 rounded-tl-3xl border-r-4 border-purple-500 transition-all group-hover:bg-black/80">
+            <div className="text-purple-400 text-xs font-bold font-['Orbitron'] mb-3 flex items-center justify-end tracking-widest">
+              RIGHT ELEMENT
+            </div>
+            <div className="text-3xl font-bold text-white font-['Orbitron'] mb-1">{rightElement.symbol}</div>
+            <div className="text-sm font-mono text-gray-400 mb-4">{rightElement.name}</div>
+            
+            <div className="space-y-1 text-[10px] font-mono text-gray-500 border-t border-white/10 pt-3 flex flex-col items-end">
+               <div className="flex items-center">PINCH TO EXPAND<span className="w-1 h-1 bg-purple-500 rounded-full ml-2"></span></div>
+               <div className="flex items-center">THUMB UP: NEXT<span className="w-1 h-1 bg-purple-500 rounded-full ml-2"></span></div>
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* Permissions Note */}
-      <div className="absolute bottom-4 left-6 text-[10px] text-gray-600 pointer-events-none">
-        Requires Camera Permission for Hand Tracking
-      </div>
+      
+      {/* Center Instruction Hint */}
+      {!combinedElement && (
+          <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 text-center opacity-60">
+             <div className="text-[10px] font-mono text-white tracking-[0.2em] mb-1">SYNTHESIS READY</div>
+             <div className="text-lg font-['Orbitron'] text-white animate-pulse">CLAP HANDS TO COMBINE</div>
+          </div>
+      )}
     </div>
   );
 };

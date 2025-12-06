@@ -1,45 +1,29 @@
-export enum ElementType {
-  HYDROGEN = 'Hydrogen',
-  CARBON = 'Carbon',
-  GOLD = 'Gold'
-}
-
-export enum ShapeTemplate {
-  ATOM = 'Atom',
-  HEART = 'Heart',
-  FLOWER = 'Flower',
-  SATURN = 'Saturn',
-  FIREWORKS = 'Fireworks'
-}
-
-export interface ParticleConfig {
+export interface ElementData {
+  symbol: string;
+  name: string;
   color: string;
-  count: number;
-  size: number;
-  description?: string;
+  atomicNumber: number;
+  description: string;
 }
 
-export interface HandState {
-  isTracking: boolean;
-  separation: number; // 0 to 1 (normalized distance between hands)
-  tension: number; // 0 to 1 (clenched fist or pinch intensity)
-  position: [number, number, number]; // Average center of hands
+export interface CombinationResult {
+  elements: [string, string]; // symbols
+  result: ElementData;
 }
 
-export const ELEMENT_CONFIGS: Record<ElementType, ParticleConfig> = {
-  [ElementType.HYDROGEN]: {
-    color: '#00BFFF',
-    count: 200,
-    size: 0.8,
-  },
-  [ElementType.CARBON]: {
-    color: '#A9A9A9',
-    count: 600,
-    size: 0.5,
-  },
-  [ElementType.GOLD]: {
-    color: '#FFD700',
-    count: 1500,
-    size: 0.3,
-  }
-};
+export interface HandGestureState {
+  pinchDistance: number; // 0 to 1
+  isPinching: boolean;
+  isPinkyGesture: boolean; // Trigger next element
+  isThumbGesture: boolean; // Trigger next element
+  position: { x: number; y: number; z: number };
+}
+
+export type Handedness = 'Left' | 'Right';
+
+export interface TrackingData {
+  left: HandGestureState;
+  right: HandGestureState;
+  isClapping: boolean;
+  handDistance: number;
+}

@@ -32,6 +32,15 @@ export const COMBINATIONS: CombinationResult[] = [
     elements: ['Cl', 'Na'],
     result: { symbol: 'NaCl', name: 'Salt', color: '#FFFFFF', atomicNumber: 0, description: 'Table salt' }
   },
+  // Sodium + Water (Safe without heat)
+  {
+    elements: ['Na', 'H2O'],
+    result: { symbol: 'NaOH', name: 'Sodium Hydroxide', color: '#DDDDDD', atomicNumber: 0, description: 'Lye' }
+  },
+  {
+    elements: ['H2O', 'Na'],
+    result: { symbol: 'NaOH', name: 'Sodium Hydroxide', color: '#DDDDDD', atomicNumber: 0, description: 'Lye' }
+  },
   {
     elements: ['H', 'Cl'],
     result: { symbol: 'HCl', name: 'Hydrochloric Acid', color: '#CC00FF', atomicNumber: 0, description: 'Strong acid' }

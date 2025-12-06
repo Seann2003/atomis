@@ -1,6 +1,6 @@
 
-import React, { useRef, useEffect, useState } from 'react';
-import { ElementData, TrackingData, CatalystType } from '../types';
+import React, { useEffect } from 'react';
+import { ElementData, TrackingData, CatalystType, GameState } from '../types';
 import { ELEMENTS } from '../constants';
 
 interface UIOverlayProps {
@@ -11,6 +11,8 @@ interface UIOverlayProps {
   trackingRef: React.MutableRefObject<TrackingData>;
   activeCatalyst: CatalystType;
   savedElements: ElementData[];
+  gameState?: GameState;
+  deathReason?: string;
 }
 
 // Icons
@@ -38,12 +40,46 @@ const FlaskIcon = () => (
     </svg>
 );
 
-const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combinedElement, message, trackingRef, activeCatalyst, savedElements }) => {
+const DeathScreen: React.FC<{ reason: string }> = ({ reason }) => {
+    useEffect(() => {
+        const t = setTimeout(() => {
+            window.location.href = '/';
+        }, 6000);
+        return () => clearTimeout(t);
+    }, []);
+
+    return (
+        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center animate-[fadeInDelayed_2s_ease-out_forwards]">
+            <h1 className="text-6xl md:text-9xl font-serif text-[#8a0e0e] tracking-widest uppercase scale-110 mb-8 drop-shadow-[0_0_10px_rgba(138,14,14,0.5)]">
+                YOU DIED
+            </h1>
+            <div className="max-w-2xl text-center px-4">
+                <p className="text-xl md:text-2xl text-gray-400 font-mono border-t border-b border-gray-800 py-4">
+                    {reason}
+                </p>
+            </div>
+            <div className="mt-12 text-sm text-gray-600 animate-pulse">
+                RETURNING TO LAB...
+            </div>
+            <style>{`
+                @keyframes fadeInDelayed {
+                    0% { opacity: 0; }
+                    30% { opacity: 0; } 
+                    100% { opacity: 1; }
+                }
+            `}</style>
+        </div>
+    );
+};
+
+const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combinedElement, message, trackingRef, activeCatalyst, savedElements, gameState, deathReason }) => {
   
-  // Combine constant elements with saved ones for the shelf
+  if (gameState === 'dead') {
+      return <DeathScreen reason={deathReason || "Unknown Cause"} />;
+  }
+
   const displayElements = [...savedElements, ...ELEMENTS.filter(e => !savedElements.find(s => s.symbol === e.symbol))];
 
-  // Animation Loop for UI Updates (No React Render Lag)
   useEffect(() => {
     let animId: number;
     const cursorLeft = document.getElementById('cursor-left');
@@ -56,7 +92,6 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
       const screenAspect = screenW / screenH;
       const videoAspect = data.cameraAspect;
 
-      // Coordinate Remapping Logic
       const getScreenCoords = (nx: number, ny: number) => {
         let x, y;
         if (screenAspect > videoAspect) {
@@ -73,19 +108,17 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
         return { x, y };
       };
 
-      // 0. Update Cursors (Using Index Position)
       if (cursorLeft) {
-          if (data.left.indexPosition.x !== 0) {
+          if (data.left.isPresent) {
               const l = getScreenCoords(data.left.indexPosition.x, data.left.indexPosition.y);
               cursorLeft.style.transform = `translate(${l.x}px, ${l.y}px)`;
               cursorLeft.style.opacity = '1';
-              // Visual flair for pinching (clicking)
               if (data.left.isPinching) {
-                  cursorLeft.classList.add('scale-75', 'bg-cyan-500/50');
-                  cursorLeft.classList.remove('scale-100', 'bg-cyan-500/20');
+                  cursorLeft.classList.add('scale-75', 'bg-cyan-500/50', 'border-white');
+                  cursorLeft.classList.remove('scale-100', 'bg-cyan-500/20', 'border-cyan-400');
               } else {
-                  cursorLeft.classList.add('scale-100', 'bg-cyan-500/20');
-                  cursorLeft.classList.remove('scale-75', 'bg-cyan-500/50');
+                  cursorLeft.classList.add('scale-100', 'bg-cyan-500/20', 'border-cyan-400');
+                  cursorLeft.classList.remove('scale-75', 'bg-cyan-500/50', 'border-white');
               }
           } else {
               cursorLeft.style.opacity = '0';
@@ -93,41 +126,35 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
       }
 
       if (cursorRight) {
-          if (data.right.indexPosition.x !== 0) {
+          if (data.right.isPresent) {
               const r = getScreenCoords(data.right.indexPosition.x, data.right.indexPosition.y);
               cursorRight.style.transform = `translate(${r.x}px, ${r.y}px)`;
               cursorRight.style.opacity = '1';
-              
               if (data.right.isPinching) {
-                  cursorRight.classList.add('scale-75', 'bg-purple-500/50');
-                  cursorRight.classList.remove('scale-100', 'bg-purple-500/20');
+                  cursorRight.classList.add('scale-75', 'bg-purple-500/50', 'border-white');
+                  cursorRight.classList.remove('scale-100', 'bg-purple-500/20', 'border-purple-500');
               } else {
-                  cursorRight.classList.add('scale-100', 'bg-purple-500/20');
-                  cursorRight.classList.remove('scale-75', 'bg-purple-500/50');
+                  cursorRight.classList.add('scale-100', 'bg-purple-500/20', 'border-purple-500');
+                  cursorRight.classList.remove('scale-75', 'bg-purple-500/50', 'border-white');
               }
           } else {
               cursorRight.style.opacity = '0';
           }
       }
 
-      // 1. Highlight Items (Shelf + Catalyst) on Hover (Using Index Finger for Aiming)
       const interactables = document.querySelectorAll('.interactable-btn');
       interactables.forEach(item => {
           const rect = item.getBoundingClientRect();
           let isHovered = false;
-          
-          // Check Left Hand (Index)
-          if (data.left.indexPosition.x !== 0) {
+          if (data.left.isPresent) {
               const l = getScreenCoords(data.left.indexPosition.x, data.left.indexPosition.y);
               if (l.x >= rect.left && l.x <= rect.right && l.y >= rect.top && l.y <= rect.bottom) isHovered = true;
           }
-          // Check Right Hand (Index)
-          if (data.right.indexPosition.x !== 0) {
+          if (data.right.isPresent) {
               const r = getScreenCoords(data.right.indexPosition.x, data.right.indexPosition.y);
               if (r.x >= rect.left && r.x <= rect.right && r.y >= rect.top && r.y <= rect.bottom) isHovered = true;
           }
 
-          // Apply Hover Styles Direct to DOM
           const el = item as HTMLElement;
           const isShelfItem = el.id.startsWith('shelf-item-');
           const isCatalystItem = el.id.startsWith('catalyst-btn-');
@@ -135,25 +162,21 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
           if (isHovered) {
               el.style.transform = 'scale(1.15)';
               el.style.zIndex = '100';
-              
               if (isShelfItem) {
                   el.style.borderColor = 'rgba(0, 255, 255, 0.9)';
                   el.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
                   el.style.boxShadow = `0 0 20px ${el.dataset.color || '#fff'}`;
               } else if (isCatalystItem) {
-                  el.style.borderColor = 'white';
-                  el.style.boxShadow = '0 0 15px white';
+                  el.style.borderColor = el.dataset.active === 'true' ? el.dataset.activecolor! : 'white';
+                  el.style.boxShadow = `0 0 15px ${el.dataset.active === 'true' ? el.dataset.activecolor : 'white'}`;
                   el.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
               }
           } else {
-              // Revert to base styles
              el.style.transform = 'scale(1)';
              el.style.zIndex = '1';
-             
              if (isShelfItem) {
                  const isLeftActive = el.dataset.symbol === leftElement.symbol;
                  const isRightActive = el.dataset.symbol === rightElement.symbol;
-                 
                  if (isLeftActive) {
                     el.style.borderColor = 'rgba(34, 211, 238, 1)'; // Cyan
                     el.style.boxShadow = '0 0 10px rgba(34,211,238,0.3)';
@@ -169,9 +192,9 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
                  el.style.backgroundColor = 'rgba(10, 10, 10, 0.7)';
              } else if (isCatalystItem) {
                  const active = el.dataset.active === 'true';
-                 el.style.backgroundColor = 'rgba(0,0,0,0.6)';
+                 el.style.backgroundColor = active ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.6)';
                  el.style.borderColor = active ? el.dataset.activecolor! : 'rgba(255,255,255,0.2)';
-                 el.style.boxShadow = active ? `0 0 15px ${el.dataset.activecolor}` : 'none';
+                 el.style.boxShadow = active ? `0 0 20px ${el.dataset.activecolor}` : 'none';
                  el.style.color = active ? el.dataset.activecolor! : '#ffffff';
              }
           }
@@ -187,19 +210,15 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
   return (
     <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between">
       
-      {/* CURSORS (Index Finger Based) */}
-      <div id="cursor-left" className="fixed top-0 left-0 w-12 h-12 rounded-full border-2 border-cyan-400 bg-cyan-500/20 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50 transition-all duration-150 ease-out flex items-center justify-center">
+      <div id="cursor-left" className="fixed top-0 left-0 w-12 h-12 rounded-full border-2 border-cyan-400 bg-cyan-500/20 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50 transition-all duration-75 ease-out flex items-center justify-center opacity-0">
           <div className="w-1 h-1 bg-cyan-200 rounded-full opacity-50"></div>
-          {/* Outer Halo */}
           <div className="absolute inset-0 rounded-full bg-cyan-400/10 blur-sm"></div>
       </div>
-      <div id="cursor-right" className="fixed top-0 left-0 w-12 h-12 rounded-full border-2 border-purple-500 bg-purple-500/20 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50 transition-all duration-150 ease-out flex items-center justify-center">
+      <div id="cursor-right" className="fixed top-0 left-0 w-12 h-12 rounded-full border-2 border-purple-500 bg-purple-500/20 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50 transition-all duration-75 ease-out flex items-center justify-center opacity-0">
           <div className="w-1 h-1 bg-purple-200 rounded-full opacity-50"></div>
-          {/* Outer Halo */}
           <div className="absolute inset-0 rounded-full bg-purple-400/10 blur-sm"></div>
       </div>
 
-      {/* --- TOP LAB SHELF --- */}
       <div className="w-full pt-6 pointer-events-auto overflow-hidden">
          <div className="w-full overflow-x-auto pb-8 pt-4 no-scrollbar">
             <div className="flex gap-4 px-8 min-w-max justify-start items-center">
@@ -232,7 +251,6 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
          </div>
       </div>
 
-      {/* --- BOTTOM CATALYST PANEL --- */}
       <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-3 pointer-events-auto z-30">
           <div className="flex flex-row gap-6">
             <div 
@@ -240,7 +258,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
                 data-type="heat"
                 data-active={activeCatalyst === 'heat'}
                 data-activecolor="#ff4400"
-                className="interactable-btn w-20 h-20 rounded-2xl border-2 flex items-center justify-center backdrop-blur-md transition-all duration-300 bg-black/40"
+                className="interactable-btn w-20 h-20 rounded-2xl border-2 flex items-center justify-center backdrop-blur-md transition-all duration-300 cursor-pointer"
             >
                 <div className="scale-75"><FlameIcon /></div>
             </div>
@@ -250,7 +268,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
                 data-type="light"
                 data-active={activeCatalyst === 'light'}
                 data-activecolor="#ffff00"
-                className="interactable-btn w-20 h-20 rounded-2xl border-2 flex items-center justify-center backdrop-blur-md transition-all duration-300 bg-black/40"
+                className="interactable-btn w-20 h-20 rounded-2xl border-2 flex items-center justify-center backdrop-blur-md transition-all duration-300 cursor-pointer"
             >
                 <div className="scale-75"><BoltIcon /></div>
             </div>
@@ -260,19 +278,17 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
                 data-type="chemical"
                 data-active={activeCatalyst === 'chemical'}
                 data-activecolor="#00ff44"
-                className="interactable-btn w-20 h-20 rounded-2xl border-2 flex items-center justify-center backdrop-blur-md transition-all duration-300 bg-black/40"
+                className="interactable-btn w-20 h-20 rounded-2xl border-2 flex items-center justify-center backdrop-blur-md transition-all duration-300 cursor-pointer"
             >
                 <div className="scale-75"><FlaskIcon /></div>
             </div>
           </div>
-          <div className="text-[9px] text-white/30 font-mono tracking-[0.3em] uppercase">Catalysts</div>
+          <div className="text-[9px] text-white/30 font-mono tracking-[0.3em] uppercase">Catalysts (Hover to Select / Pinch to Off)</div>
       </div>
 
-      {/* --- BOTTOM HUD --- */}
       <div className="p-6 md:p-10 flex flex-col justify-end">
          
-         {/* Center Message */}
-         {combinedElement && (
+         {combinedElement && combinedElement.symbol !== 'BOOM' && (
             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center w-full pointer-events-none">
                 <div className="relative">
                     <div className="absolute inset-0 bg-cyan-500 blur-[100px] opacity-20 rounded-full"></div>
@@ -289,37 +305,33 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ leftElement, rightElement, combin
             </div>
          )}
          
-         {/* Futuristic Status Ticker - MOVED UP */}
          <div className="absolute bottom-44 left-1/2 transform -translate-x-1/2 text-center w-full pointer-events-none">
             <div className="relative inline-block overflow-hidden rounded-md group">
-                 {/* High-Tech Clip Path Border */}
                 <div 
                     className={`
                         relative z-10 px-12 py-5 font-mono tracking-widest uppercase text-sm font-bold bg-black/80 backdrop-blur-xl border-l-4 border-r-4
                         ${message.includes("HOLD") ? 'border-yellow-500 text-yellow-400' : 
                           message.includes("SUCCESS") || message.includes("SAVED") ? 'border-green-500 text-green-400' :
-                          message.includes("Unstable") || message.includes("Failed") ? 'border-red-500 text-red-400' :
+                          message.includes("Unstable") || message.includes("Failed") || message.includes("WARNING") ? 'border-red-500 text-red-400' :
                           'border-cyan-500 text-cyan-400'}
                     `}
                     style={{ clipPath: 'polygon(10% 0, 100% 0, 100% 80%, 90% 100%, 0 100%, 0 20%)' }}
                 >
                     <span className="mr-4 opacity-50 text-xs">STATUS //</span>
                     {message}
-                    {/* Scanning Line Animation */}
                     <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-transparent via-white/5 to-transparent -translate-y-full animate-[scan_2s_linear_infinite]"></div>
                 </div>
             </div>
 
             {!combinedElement && (
                 <div className="mt-6 flex gap-8 justify-center text-[9px] text-white/40 font-mono uppercase tracking-[0.2em]">
-                    <span className="flex items-center gap-2"><div className="w-1 h-1 bg-cyan-400"></div>Pinch</span>
-                    <span className="flex items-center gap-2"><div className="w-1 h-1 bg-white"></div>Clap</span>
-                    <span className="flex items-center gap-2"><div className="w-1 h-1 bg-red-500"></div>Spin</span>
+                    <span className="flex items-center gap-2"><div className="w-1 h-1 bg-cyan-400"></div>Hover Select</span>
+                    <span className="flex items-center gap-2"><div className="w-1 h-1 bg-white"></div>Clap Fuse</span>
+                    <span className="flex items-center gap-2"><div className="w-1 h-1 bg-red-500"></div>Spin Reset</span>
                 </div>
             )}
          </div>
 
-         {/* Active Elements Display */}
          <div className="flex justify-between w-full px-4">
             <div className={`text-left transition-all duration-500 ${combinedElement ? 'opacity-0 translate-y-10' : 'opacity-100'}`}>
                <div className="text-[10px] text-cyan-400 mb-2 font-mono tracking-[0.2em] border-b border-cyan-900 pb-1 inline-block">SYSTEM: LEFT HAND</div>

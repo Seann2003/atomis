@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { ElementData, TrackingData, CatalystType, GameState } from "../types";
 import { ELEMENTS } from "../constants";
+import explosionMeme from "../assets/image.png";
 
 interface UIOverlayProps {
   leftElement: ElementData;
@@ -114,15 +115,22 @@ const DeathScreen: React.FC<{ reason: string }> = ({ reason }) => {
 
     return (
         <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center animate-[fadeInDelayed_2s_ease-out_forwards]">
-            <h1 className="text-6xl md:text-9xl font-serif text-[#8a0e0e] tracking-widest uppercase scale-110 mb-8 drop-shadow-[0_0_10px_rgba(138,14,14,0.5)]">
+             <div className="absolute inset-0 z-0 flex items-center justify-center opacity-0 animate-[fadeInDelayed_3s_ease-out_forwards]">
+                <img 
+                    src={explosionMeme} 
+                    alt="Explosion Meme" 
+                    className="max-w-full max-h-full object-contain opacity-60"
+                />
+            </div>
+            <h1 className="relative z-10 text-6xl md:text-9xl font-serif text-[#8a0e0e] tracking-widest uppercase scale-110 mb-8 drop-shadow-[0_0_10px_rgba(138,14,14,0.5)]">
                 YOU DIED
             </h1>
-            <div className="max-w-2xl text-center px-4">
+            <div className="relative z-10 max-w-2xl text-center px-4">
                 <p className="text-xl md:text-2xl text-gray-400 font-mono border-t border-b border-gray-800 py-4">
                     {reason}
                 </p>
             </div>
-            <div className="mt-12 text-sm text-gray-600 animate-pulse">
+            <div className="relative z-10 mt-12 text-sm text-gray-600 animate-pulse">
                 RETURNING TO LAB...
             </div>
             <style>{`

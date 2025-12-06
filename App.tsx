@@ -20,11 +20,29 @@ const App: React.FC = () => {
   const [message, setMessage] = useState("LAB READY");
   const [activeCatalyst, setActiveCatalyst] = useState<CatalystType>('none');
   const [savedElements, setSavedElements] = useState<ElementData[]>([]);
+  const [labSlots, setLabSlots] = useState<ElementData[]>([]);
 
-  // Load saved history on mount
+  // Load saved history and lab slots on mount
   useEffect(() => {
     const history = JSON.parse(localStorage.getItem('chemLabHistory') || '[]');
     setSavedElements(history);
+    
+    const savedSlots = localStorage.getItem('labSlots');
+    if (savedSlots) {
+      try {
+        const parsed = JSON.parse(savedSlots);
+        setLabSlots(parsed);
+        // Set initial elements from slots if available
+        if (parsed.length > 0) {
+          setLeftElement(parsed[0]);
+          if (parsed.length > 1) {
+            setRightElement(parsed[1]);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse saved slots', e);
+      }
+    }
   }, []);
 
   const saveElement = (element: ElementData) => {
@@ -35,6 +53,24 @@ const App: React.FC = () => {
           localStorage.setItem('chemLabHistory', JSON.stringify(newHistory));
           setSavedElements(newHistory);
       }
+      
+      // Automatically add to lab slots if not already present and slots aren't full
+      setLabSlots(prevSlots => {
+          // Check if element is already in slots
+          if (prevSlots.find(e => e.symbol === element.symbol)) {
+              return prevSlots; // Already in slots, no change
+          }
+          
+          // Check if slots are full (max 8)
+          if (prevSlots.length >= 8) {
+              return prevSlots; // Slots full, can't add
+          }
+          
+          // Add to slots
+          const newSlots = [...prevSlots, element];
+          localStorage.setItem('labSlots', JSON.stringify(newSlots));
+          return newSlots;
+      });
   };
 
   // Error State Ref (for update loop access)
@@ -160,11 +196,8 @@ const App: React.FC = () => {
       else if (hit.id.startsWith('shelf-item-')) {
           const symbol = hit.dataset.symbol;
           
-          // Combine all available elements to find the selected one
-          const allElements = [...savedElements, ...ELEMENTS];
-          
-          // We find the first match. Note: Saved elements appear first in the UI list logic.
-          const selectedElement = allElements.find(e => e.symbol === symbol);
+          // Only use elements from lab slots
+          const selectedElement = labSlots.find(e => e.symbol === symbol);
           
           if (selectedElement) {
              if (hand === 'LEFT') {
@@ -178,9 +211,16 @@ const App: React.FC = () => {
              setTimeout(() => setMessage("LAB READY"), 1000);
           }
       }
-  }, [savedElements, isDashboardOpen]);
+  }, [labSlots, isDashboardOpen]);
 
   const onTrackingUpdate = useCallback((data: TrackingData) => {
+    // Disable all gesture effects when dashboard is open
+    if (isDashboardOpen) {
+      // Still update the ref for visual tracking (mascot, etc.) but don't process gestures
+      trackingDataRef.current = data;
+      return;
+    }
+    
     trackingDataRef.current = data;
     const now = Date.now();
 
@@ -287,13 +327,32 @@ const App: React.FC = () => {
                 message={message}
                 trackingRef={trackingDataRef}
                 activeCatalyst={activeCatalyst}
-                savedElements={savedElements}
+                labSlots={labSlots}
                 isDashboardOpen={isDashboardOpen}
                 onToggleDashboard={() => setIsDashboardOpen(!isDashboardOpen)}
             />
             <Dashboard 
                isOpen={isDashboardOpen}
-               onClose={() => setIsDashboardOpen(false)}
+               onClose={() => {
+                 // Reload slots when closing dashboard in case they changed
+                 const savedSlots = localStorage.getItem('labSlots');
+                 if (savedSlots) {
+                   try {
+                     const parsed = JSON.parse(savedSlots);
+                     setLabSlots(parsed);
+                     // Update active elements if current ones are not in slots
+                     if (parsed.length > 0 && !parsed.find(e => e.symbol === leftElement.symbol)) {
+                       setLeftElement(parsed[0]);
+                     }
+                     if (parsed.length > 1 && !parsed.find(e => e.symbol === rightElement.symbol)) {
+                       setRightElement(parsed[1] || parsed[0]);
+                     }
+                   } catch (e) {
+                     console.error('Failed to parse saved slots', e);
+                   }
+                 }
+                 setIsDashboardOpen(false);
+               }}
                savedElements={savedElements}
             />
             <MascotGuide 

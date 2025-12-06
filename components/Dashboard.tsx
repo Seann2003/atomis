@@ -14,17 +14,53 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements }) => {
   const [allDiscoverables, setAllDiscoverables] = useState<ElementData[]>([]);
   const [selectedInfo, setSelectedInfo] = useState<ElementData | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<ElementData[]>([]);
+  const MAX_SLOTS = 8;
 
   // Tracking Ref for the Dashboard Avatar
   const dashboardTrackingRef = useRef<TrackingData>({
-    left: { pinchDistance: 0, isPinching: false, isPointing: false, position: {x: 0.5, y: 0.5, z: 0}, isDetected: false },
-    right: { pinchDistance: 0, isPinching: false, isPointing: false, position: {x: 0.5, y: 0.5, z: 0}, isDetected: false },
+    left: { 
+      pinchDistance: 0, 
+      isPinching: false, 
+      isPointing: false, 
+      position: {x: 0.5, y: 0.5, z: 0}, 
+      indexPosition: {x: 0.5, y: 0.5, z: 0},
+      isDetected: false 
+    },
+    right: { 
+      pinchDistance: 0, 
+      isPinching: false, 
+      isPointing: false, 
+      position: {x: 0.5, y: 0.5, z: 0}, 
+      indexPosition: {x: 0.5, y: 0.5, z: 0},
+      isDetected: false 
+    },
     isClapping: false,
     isResetGesture: false,
     isClosedFist: false,
     handDistance: 1000,
     cameraAspect: 1.77
   });
+
+  // Load slots from localStorage on mount
+  useEffect(() => {
+    const savedSlots = localStorage.getItem('labSlots');
+    if (savedSlots) {
+      try {
+        const parsed = JSON.parse(savedSlots);
+        setSelectedSlots(parsed);
+      } catch (e) {
+        console.error('Failed to parse saved slots', e);
+      }
+    }
+  }, []);
+
+  // Save slots to localStorage whenever they change
+  useEffect(() => {
+    if (selectedSlots.length > 0) {
+      localStorage.setItem('labSlots', JSON.stringify(selectedSlots));
+    }
+  }, [selectedSlots]);
 
   useEffect(() => {
     // 1. Get all unique combination results
@@ -79,6 +115,24 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements })
       return allDiscoverables.filter(el => (el.level || 1) === level);
   };
 
+  // Check if element is in selected slots
+  const isInSlot = (el: ElementData) => {
+    return selectedSlots.some(s => s.symbol === el.symbol);
+  };
+
+  // Toggle element in/out of slots
+  const toggleSlot = (el: ElementData) => {
+    if (isInSlot(el)) {
+      // Remove from slots
+      setSelectedSlots(prev => prev.filter(s => s.symbol !== el.symbol));
+    } else {
+      // Add to slots (if not at max)
+      if (selectedSlots.length < MAX_SLOTS) {
+        setSelectedSlots(prev => [...prev, el]);
+      }
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -115,7 +169,15 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements })
                 <h3 className="text-sm font-mono text-cyan-500/80 tracking-widest mb-4 border-b border-cyan-500/20 pb-2">LEVEL 1 // BASE ELEMENTS</h3>
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
                     {getElementsByLevel(1).map(el => (
-                        <DashboardItem key={el.symbol} el={el} unlocked={true} onClick={() => setSelectedInfo(el)} />
+                        <DashboardItem 
+                            key={el.symbol} 
+                            el={el} 
+                            unlocked={true} 
+                            inSlot={isInSlot(el)}
+                            onClick={() => setSelectedInfo(el)}
+                            onToggleSlot={() => toggleSlot(el)}
+                            canAdd={selectedSlots.length < MAX_SLOTS}
+                        />
                     ))}
                 </div>
              </div>
@@ -125,7 +187,15 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements })
                 <h3 className="text-sm font-mono text-purple-500/80 tracking-widest mb-4 border-b border-purple-500/20 pb-2">LEVEL 2 // COMPOUNDS</h3>
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
                     {getElementsByLevel(2).map(el => (
-                        <DashboardItem key={el.symbol} el={el} unlocked={isUnlocked(el)} onClick={() => isUnlocked(el) && setSelectedInfo(el)} />
+                        <DashboardItem 
+                            key={el.symbol} 
+                            el={el} 
+                            unlocked={isUnlocked(el)} 
+                            inSlot={isInSlot(el)}
+                            onClick={() => isUnlocked(el) && setSelectedInfo(el)}
+                            onToggleSlot={() => isUnlocked(el) && toggleSlot(el)}
+                            canAdd={selectedSlots.length < MAX_SLOTS}
+                        />
                     ))}
                 </div>
              </div>
@@ -148,6 +218,41 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements })
           {/* Mascot / Info Panel */}
           <div className="w-80 flex-shrink-0 flex flex-col gap-4">
              
+             {/* Slot Management Panel */}
+             <div className="bg-gradient-to-b from-cyan-900/20 to-black/40 border border-cyan-500/30 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                    <div className="text-xs font-mono text-cyan-400 uppercase tracking-widest">Lab Slots</div>
+                    <div className="text-sm font-bold font-mono text-cyan-300">
+                        {selectedSlots.length} / {MAX_SLOTS}
+                    </div>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                    {Array.from({ length: MAX_SLOTS }).map((_, i) => {
+                        const slotElement = selectedSlots[i];
+                        return (
+                            <div
+                                key={i}
+                                className={`
+                                    aspect-square rounded-lg border-2 flex items-center justify-center text-xs
+                                    ${slotElement 
+                                        ? 'border-cyan-500 bg-cyan-900/30' 
+                                        : 'border-white/10 bg-black/40 border-dashed'
+                                    }
+                                `}
+                                style={slotElement ? { color: slotElement.color } : {}}
+                            >
+                                {slotElement ? slotElement.symbol : '+'}
+                            </div>
+                        );
+                    })}
+                </div>
+                {selectedSlots.length === 0 && (
+                    <div className="text-xs text-yellow-400/70 font-mono mt-2 text-center">
+                        Select elements to add to lab slots
+                    </div>
+                )}
+             </div>
+
              {/* Selected Info Card */}
              <div className="bg-black/40 border border-white/10 rounded-2xl p-6 min-h-[200px] flex flex-col items-center justify-center text-center relative">
                 {selectedInfo ? (
@@ -155,7 +260,23 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements })
                         <div className="absolute top-6 right-6 text-[10px] font-mono border border-white/20 px-2 py-1 rounded text-white/50">LVL {selectedInfo.level || 1}</div>
                         <div className="text-6xl font-['Orbitron'] font-bold mb-2" style={{color: selectedInfo.color}}>{selectedInfo.symbol}</div>
                         <div className="text-xl font-bold text-white mb-4">{selectedInfo.name}</div>
-                        <p className="text-sm text-gray-400 leading-relaxed">{selectedInfo.description}</p>
+                        {isUnlocked(selectedInfo) && (
+                            <button
+                                onClick={() => toggleSlot(selectedInfo)}
+                                disabled={!isInSlot(selectedInfo) && selectedSlots.length >= MAX_SLOTS}
+                                className={`
+                                    mt-4 px-4 py-2 rounded-lg font-mono text-xs font-bold transition-all
+                                    ${isInSlot(selectedInfo)
+                                        ? 'bg-red-600 hover:bg-red-500 text-white'
+                                        : selectedSlots.length >= MAX_SLOTS
+                                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                        : 'bg-cyan-600 hover:bg-cyan-500 text-black'
+                                    }
+                                `}
+                            >
+                                {isInSlot(selectedInfo) ? 'REMOVE FROM SLOT' : 'ADD TO SLOT'}
+                            </button>
+                        )}
                     </>
                 ) : (
                     <div className="text-white/20 font-mono text-sm">
@@ -193,9 +314,16 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements })
              <button 
                 id="dashboard-close-btn"
                 onClick={onClose}
-                className="interactable-btn mt-auto w-full py-4 bg-cyan-600 hover:bg-cyan-500 text-black font-bold font-['Orbitron'] tracking-widest rounded-xl transition-all shadow-[0_0_20px_rgba(8,145,178,0.4)] hover:shadow-[0_0_30px_rgba(34,211,238,0.6)]"
+                disabled={selectedSlots.length === 0}
+                className={`
+                    interactable-btn mt-auto w-full py-4 font-bold font-['Orbitron'] tracking-widest rounded-xl transition-all
+                    ${selectedSlots.length === 0
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        : 'bg-cyan-600 hover:bg-cyan-500 text-black shadow-[0_0_20px_rgba(8,145,178,0.4)] hover:shadow-[0_0_30px_rgba(34,211,238,0.6)]'
+                    }
+                `}
              >
-                ENTER LABORATORY
+                {selectedSlots.length === 0 ? 'SELECT SLOTS TO ENTER' : 'ENTER LABORATORY'}
              </button>
           </div>
       </div>
@@ -210,17 +338,34 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements })
   );
 };
 
-const DashboardItem = ({ el, unlocked, onClick }: { el: ElementData, unlocked: boolean, onClick: () => void }) => (
+const DashboardItem = ({ 
+    el, 
+    unlocked, 
+    inSlot, 
+    onClick, 
+    onToggleSlot, 
+    canAdd 
+}: { 
+    el: ElementData, 
+    unlocked: boolean, 
+    inSlot: boolean,
+    onClick: () => void,
+    onToggleSlot: () => void,
+    canAdd: boolean
+}) => (
     <div 
     id={`dashboard-item-${el.symbol}`} // Hook for hit test
     className={`
         interactable-btn
         aspect-square rounded-xl border-2 flex flex-col items-center justify-center relative cursor-pointer transition-all duration-300
         ${unlocked 
-            ? 'border-white/20 bg-white/5 hover:bg-white/10 hover:border-cyan-500 hover:shadow-[0_0_20px_rgba(34,211,238,0.3)]' 
+            ? inSlot
+                ? 'border-cyan-500 bg-cyan-900/20 hover:bg-cyan-900/30 shadow-[0_0_15px_rgba(34,211,238,0.4)]'
+                : 'border-white/20 bg-white/5 hover:bg-white/10 hover:border-cyan-500 hover:shadow-[0_0_20px_rgba(34,211,238,0.3)]' 
             : 'border-white/20 bg-black opacity-80 '}
     `}
     onClick={onClick}
+    onDoubleClick={unlocked ? onToggleSlot : undefined}
     style={!unlocked ? { borderColor: 'rgba(255,255,255,0.1)' } : {}}
     >
     {unlocked ? (
@@ -228,9 +373,19 @@ const DashboardItem = ({ el, unlocked, onClick }: { el: ElementData, unlocked: b
             {el.atomicNumber > 0 && (
                  <div className="absolute top-2 left-2 text-base font-mono text-white/50">{el.atomicNumber}</div>
             )}
-            <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-green-500 shadow-[0_0_5px_#00ff00]"></div>
+            {inSlot && (
+                <div className="absolute top-2 right-2 w-3 h-3 rounded-full bg-cyan-500 shadow-[0_0_8px_#00ffff] border border-white/30"></div>
+            )}
+            {!inSlot && (
+                <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-green-500 shadow-[0_0_5px_#00ff00]"></div>
+            )}
             <div className="text-2xl md:text-3xl font-bold font-['Orbitron'] mb-1" style={{color: el.color}}>{el.symbol}</div>
             <div className="text-[8px] md:text-[10px] font-mono text-gray-400 uppercase tracking-wider text-center px-1">{el.name}</div>
+            {unlocked && (
+                <div className="absolute bottom-1 text-[8px] font-mono text-cyan-400/60">
+                    {inSlot ? 'IN SLOT' : canAdd ? 'DBL-CLICK TO ADD' : 'SLOTS FULL'}
+                </div>
+            )}
         </>
     ) : (
             <div className="text-3xl font-mono text-gray-700">?</div>

@@ -22,6 +22,7 @@ export interface HandGestureState {
   isPointing: boolean; // Index finger up, others curled
   position: { x: number; y: number; z: number }; // Palm Center
   indexPosition: { x: number; y: number; z: number }; // Index Tip
+  isDetected?: boolean; // Whether hand is currently being tracked
 }
 
 export type Handedness = 'left' | 'right';

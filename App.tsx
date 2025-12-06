@@ -24,6 +24,8 @@ const App: React.FC = () => {
   
   const [gameState, setGameState] = useState<GameState>('playing');
   const [deathReason, setDeathReason] = useState<string>('');
+  const [showSixtySeven, setShowSixtySeven] = useState(false);
+  const sixtySevenGestureProcessedRef = useRef(false);
   
   // Quiz Mode State
   const [quizMode, setQuizMode] = useState<{
@@ -177,6 +179,7 @@ const App: React.FC = () => {
     isClapping: false,
     isResetGesture: false,
     isClosedFist: false,
+    isSixtySevenGesture: false,
     handDistance: 1000,
     cameraAspect: 1.77
   });
@@ -452,6 +455,41 @@ const App: React.FC = () => {
     trackingDataRef.current = data;
     const now = Date.now();
     
+    // Handle 67 gesture detection - Easter egg: unlock Holmium
+    if (data.isSixtySevenGesture && !sixtySevenGestureProcessedRef.current) {
+      sixtySevenGestureProcessedRef.current = true;
+      setShowSixtySeven(true);
+      setTimeout(() => {
+        setShowSixtySeven(false);
+      }, 3000); // Show for 3 seconds
+      
+      // Check if Holmium is already unlocked
+      const holmium = ELEMENTS.find(e => e.symbol === 'Ho');
+      if (holmium) {
+        const isAlreadyUnlocked = savedElements.some(e => e.symbol === 'Ho');
+        if (!isAlreadyUnlocked) {
+          // Unlock Holmium (add to saved elements)
+          saveElement(holmium);
+          setMessage("EASTER EGG DISCOVERED! NEW ELEMENT: HOLMIUM");
+          setTimeout(() => {
+            if (quizMode.active && quizMode.targetName) {
+              setMessage(`QUIZ: CREATE ${quizMode.targetName.toUpperCase()}`);
+            } else {
+              setMessage("LAB READY");
+            }
+          }, 4000);
+        }
+      }
+      
+      // Reset the flag after a delay to allow gesture detection again
+      setTimeout(() => {
+        sixtySevenGestureProcessedRef.current = false;
+      }, 5000);
+    } else if (!data.isSixtySevenGesture) {
+      // Reset flag when gesture is no longer detected
+      sixtySevenGestureProcessedRef.current = false;
+    }
+    
     if (gameState === 'dead') return;
 
     if (data.isResetGesture || (data.isClosedFist && combinedElement)) {
@@ -570,9 +608,9 @@ const App: React.FC = () => {
                 trackingData={trackingDataRef}
                 activeCatalyst={activeCatalyst}
             />
-            <UIOverlay 
-                leftElement={leftElement} 
-                rightElement={rightElement} 
+            <UIOverlay
+                leftElement={leftElement}
+                rightElement={rightElement}
                 combinedElement={combinedElement}
                 message={message}
                 trackingRef={trackingDataRef}
@@ -584,6 +622,7 @@ const App: React.FC = () => {
                 savedElements={savedElements}
                 gameState={gameState}
                 deathReason={deathReason}
+                showSixtySeven={showSixtySeven}
             />
             <Dashboard 
                isOpen={isDashboardOpen}

@@ -56,6 +56,7 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, savedElements, l
     isClapping: false,
     isResetGesture: false,
     isClosedFist: false,
+    isSixtySevenGesture: false,
     handDistance: 1000,
     cameraAspect: 1.77
   });

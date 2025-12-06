@@ -17,6 +17,7 @@ interface UIOverlayProps {
   savedElements: ElementData[];
   gameState?: GameState;
   deathReason?: string;
+  showSixtySeven?: boolean;
 }
 
 // Icons
@@ -158,6 +159,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
   savedElements,
   gameState,
   deathReason,
+  showSixtySeven = false
 }) => {
   if (gameState === 'dead') {
       return <DeathScreen reason={deathReason || "Unknown Cause"} />;
@@ -624,6 +626,20 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
         </div>
       </div>
 
+      {/* 67 Gesture Display */}
+      {showSixtySeven && (
+        <div className="fixed inset-0 flex items-center justify-center z-[200] pointer-events-none">
+          <div 
+            className="text-[20rem] font-['Orbitron'] font-black text-transparent bg-clip-text bg-gradient-to-b from-cyan-400 via-purple-500 to-pink-500 drop-shadow-[0_0_100px_rgba(255,255,255,0.8)] animate-pulse"
+            style={{
+              animation: 'pulse 1s ease-in-out infinite, fadeInOut 3s ease-in-out forwards'
+            }}
+          >
+            67
+          </div>
+        </div>
+      )}
+
       <style>{`
         .no-scrollbar::-webkit-scrollbar {
           display: none;
@@ -635,6 +651,12 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
         @keyframes scan {
             0% { transform: translateY(-100%); }
             100% { transform: translateY(100%); }
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: scale(0.5); }
+            20% { opacity: 1; transform: scale(1); }
+            80% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: scale(0.5); }
         }
       `}</style>
     </div>

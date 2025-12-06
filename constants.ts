@@ -64,6 +64,13 @@ export const ELEMENTS: ElementData[] = [
     atomicNumber: 20,
     description: "Bone mineral",
   },
+  {
+    symbol: "Ho",
+    name: "Holmium",
+    color: "#FF6B9D",
+    atomicNumber: 67,
+    description: "Rare earth metal",
+  },
 ];
 
 export const COMBINATIONS: CombinationResult[] = [

@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { FilesetResolver, HandLandmarker, HandLandmarkerResult } from '@mediapipe/tasks-vision';
-import { analyzeHand, GestureBuffer, detectClosedFist } from '../services/gestureRecognition';
+import { analyzeHand, GestureBuffer, detectClosedFist, detectPalmUp, AlternatingMotionBuffer } from '../services/gestureRecognition';
 import { TrackingData } from '../types';
 
 interface HandTrackerProps {
@@ -17,6 +17,8 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
   // Gesture Buffers for Reset Detection
   const leftBuffer = useRef(new GestureBuffer());
   const rightBuffer = useRef(new GestureBuffer());
+  // Buffer for alternating motion detection (67 gesture)
+  const alternatingMotionBuffer = useRef(new AlternatingMotionBuffer());
 
   useEffect(() => {
     onUpdateRef.current = onUpdate;
@@ -107,6 +109,7 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
         isClapping: false,
         isResetGesture: false,
         isClosedFist: false,
+        isSixtySevenGesture: false,
         handDistance: 1000,
         cameraAspect: videoAspect
       };
@@ -114,6 +117,10 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
       if (result && result.landmarks) {
         let detectedFist = false;
         const detectedHands = new Set<string>();
+        let leftPalmUp = false;
+        let rightPalmUp = false;
+        let leftLandmarks: any = null;
+        let rightLandmarks: any = null;
 
         result.handedness.forEach((h, index) => {
           const landmarks = result!.landmarks[index];
@@ -127,6 +134,16 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
 
           const isFist = detectClosedFist(landmarks);
           if (isFist) detectedFist = true;
+          
+          // Store palm up state and landmarks for 67 gesture detection
+          const palmUp = detectPalmUp(landmarks);
+          if (label === 'Right') {
+            leftPalmUp = palmUp;
+            leftLandmarks = landmarks;
+          } else {
+            rightPalmUp = palmUp;
+            rightLandmarks = landmarks;
+          }
 
           // Logic for Circular Reset Gesture using Index Position now for better circular tracking
           if (handState.isPointing) {
@@ -176,6 +193,30 @@ const HandTracker: React.FC<HandTrackerProps> = ({ onUpdate, onCameraReady }) =>
           trackingData.handDistance = dist;
           
           if (dist < 0.12) trackingData.isClapping = true;
+          
+          // 67 Gesture Detection: Both palms up + alternating up/down motion
+          if (leftPalmUp && rightPalmUp && leftLandmarks && rightLandmarks) {
+            const leftY = trackingData.left.position.y;
+            const rightY = trackingData.right.position.y;
+            
+            alternatingMotionBuffer.current.addLeftPoint(leftY);
+            alternatingMotionBuffer.current.addRightPoint(rightY);
+            
+            if (alternatingMotionBuffer.current.detectAlternatingPattern(
+              leftPalmUp, 
+              rightPalmUp, 
+              leftY, 
+              rightY
+            )) {
+              trackingData.isSixtySevenGesture = true;
+            }
+          } else {
+            // Reset buffer if palms are not both up
+            alternatingMotionBuffer.current.reset();
+          }
+        } else {
+          // Reset buffer if not both hands detected
+          alternatingMotionBuffer.current.reset();
         }
       }
 

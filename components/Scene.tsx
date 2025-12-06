@@ -24,6 +24,12 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
 
   const [opacities, setOpacities] = useState({ left: 1, right: 1, combined: 0 });
 
+  // References for Velocity Calculation
+  const lastLeftPos = useRef({ x: 0, y: 0 });
+  const lastRightPos = useRef({ x: 0, y: 0 });
+  const leftRotationSpeed = useRef(0.005);
+  const rightRotationSpeed = useRef(0.005);
+
   useEffect(() => {
     if (combinedElement) {
         setOpacities({ left: 0, right: 0, combined: 1 });
@@ -39,31 +45,55 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
     leftPinchRef.current = combinedElement ? 0 : data.left.pinchDistance;
     rightPinchRef.current = combinedElement ? 0 : data.right.pinchDistance;
     
-    // Use the same coordinate mapping logic as UI or simple approximation for 3D depth
-    // Note: To perfectly match the DOM cursor, we would need to unproject screen coords.
-    // However, for the 3D particles, a simpler map often feels better as it keeps them in the "world" center.
-    // Let's stick to the previous world map but ensure it covers the view.
-    const mapX = (x: number) => (x - 0.5) * 16; // Wider range
-    const mapY = (y: number) => -(y - 0.5) * 9;
+    const mapX = (x: number) => (x - 0.5) * 18; 
+    const mapY = (y: number) => -(y - 0.5) * 10;
 
+    // LEFT ATOM LOGIC
     if (leftGroupRef.current) {
         let targetPos = new THREE.Vector3(0,0,0);
         if (combinedElement) targetPos.set(0, 0, 0);
         else targetPos.set(mapX(data.left.position.x), mapY(data.left.position.y), 0);
-        leftGroupRef.current.position.lerp(targetPos, 0.1);
-        leftGroupRef.current.rotation.z += 0.005;
+        
+        // Position Lerp
+        leftGroupRef.current.position.lerp(targetPos, 0.12);
+        
+        // Rotation Momentum Calculation
+        const dx = data.left.position.x - lastLeftPos.current.x;
+        // If moving left/right, spin faster
+        if (!combinedElement) {
+           leftRotationSpeed.current = THREE.MathUtils.lerp(leftRotationSpeed.current, 0.005 + (dx * 1.5), 0.1);
+        }
+        
+        leftGroupRef.current.rotation.y += leftRotationSpeed.current;
+        leftGroupRef.current.rotation.z += 0.002;
+        
+        lastLeftPos.current = { x: data.left.position.x, y: data.left.position.y };
     }
 
+    // RIGHT ATOM LOGIC
     if (rightGroupRef.current) {
         let targetPos = new THREE.Vector3(0,0,0);
         if (combinedElement) targetPos.set(0, 0, 0);
         else targetPos.set(mapX(data.right.position.x), mapY(data.right.position.y), 0);
-        rightGroupRef.current.position.lerp(targetPos, 0.1);
-        rightGroupRef.current.rotation.z -= 0.005;
+        
+        rightGroupRef.current.position.lerp(targetPos, 0.12);
+        
+        // Rotation Momentum
+        const dx = data.right.position.x - lastRightPos.current.x;
+        if (!combinedElement) {
+            rightRotationSpeed.current = THREE.MathUtils.lerp(rightRotationSpeed.current, -0.005 + (dx * 1.5), 0.1);
+        }
+
+        rightGroupRef.current.rotation.y += rightRotationSpeed.current;
+        rightGroupRef.current.rotation.z -= 0.002;
+        
+        lastRightPos.current = { x: data.right.position.x, y: data.right.position.y };
     }
 
+    // COMBINED ATOM LOGIC
     if (combinedGroupRef.current) {
-        combinedGroupRef.current.rotation.y += 0.002;
+        combinedGroupRef.current.rotation.y += 0.01;
+        combinedGroupRef.current.rotation.x += 0.005;
     }
   });
 
@@ -71,6 +101,7 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
     <>
       <ambientLight intensity={0.5} />
       <pointLight position={[10, 10, 10]} intensity={1.5} />
+      <pointLight position={[-10, -10, -5]} intensity={0.5} color="#00ffff" />
       
       {/* Left Element */}
       <group ref={leftGroupRef}>
@@ -80,7 +111,7 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
             opacityTarget={opacities.left}
             isActive={!combinedElement}
           />
-         {!combinedElement && <AtomLabel element={leftElement} position={[0, -1.5, 0]} />}
+         {!combinedElement && <AtomLabel element={leftElement} position={[0, -1.8, 0]} />}
       </group>
 
       {/* Right Element */}
@@ -91,7 +122,7 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
             opacityTarget={opacities.right}
             isActive={!combinedElement}
           />
-         {!combinedElement && <AtomLabel element={rightElement} position={[0, -1.5, 0]} />}
+         {!combinedElement && <AtomLabel element={rightElement} position={[0, -1.8, 0]} />}
       </group>
 
       {/* Combined Element */}
@@ -104,7 +135,7 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
                     opacityTarget={opacities.combined}
                     isActive={!!combinedElement}
                   />
-                 <AtomLabel element={combinedElement} position={[0, -2, 0]} />
+                 <AtomLabel element={combinedElement} position={[0, -2.5, 0]} />
             </>
         )}
       </group>
@@ -115,7 +146,7 @@ const SceneContent: React.FC<SceneProps> = ({ leftElement, rightElement, combine
 const Scene: React.FC<SceneProps> = (props) => {
   return (
     <Canvas dpr={[1, 2]} gl={{ alpha: true }}>
-      <PerspectiveCamera makeDefault position={[0, 0, 8]} fov={60} />
+      <PerspectiveCamera makeDefault position={[0, 0, 9]} fov={55} />
       <SceneContent {...props} />
       <OrbitControls enableZoom={false} enablePan={false} enableRotate={false} />
     </Canvas>

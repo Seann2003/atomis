@@ -3,7 +3,7 @@ import Scene from './components/Scene';
 import HandTracker from './components/HandTracker';
 import UIOverlay from './components/UIOverlay';
 import { ELEMENTS, COMBINATIONS } from './constants';
-import { TrackingData, ElementData, DragState } from './types';
+import { TrackingData, ElementData } from './types';
 
 const App: React.FC = () => {
   const [isCameraReady, setIsCameraReady] = useState(false);
@@ -11,9 +11,6 @@ const App: React.FC = () => {
   const [rightIndex, setRightIndex] = useState(3);
   const [combinedElement, setCombinedElement] = useState<ElementData | null>(null);
   const [message, setMessage] = useState("LAB READY");
-  
-  // Drag State
-  const [dragState, setDragState] = useState<DragState>({ active: false, hand: null, element: null });
 
   // Error State Ref (for update loop access)
   const fusionErrorRef = useRef(false);
@@ -27,6 +24,10 @@ const App: React.FC = () => {
     handDistance: 1000,
     cameraAspect: 1.77
   });
+
+  // Previous frame pinch state (for detecting rising edge/click)
+  const lastLeftPinch = useRef(false);
+  const lastRightPinch = useRef(false);
 
   const clapStartRef = useRef<number>(0);
   const CLAP_DURATION_THRESHOLD = 800; // ms to hold clap
@@ -116,53 +117,46 @@ const App: React.FC = () => {
         return;
     }
 
-    // 2. Drag Logic (Takes priority over Clap to prevent accidental mix)
-    // We update state inside here to avoid React render loop lag, but setDragState triggers re-render only on change
-    
-    // Check for Start Drag
-    if (!dragState.active && !combinedElement && !fusionErrorRef.current) {
-         // Left
-         if (data.left.isPinching) {
-             const hit = performHitTest(data.left.position.x, data.left.position.y, data.cameraAspect);
-             if (hit) {
-                 const symbol = hit.dataset.symbol;
-                 const el = ELEMENTS.find(e => e.symbol === symbol);
-                 if (el) setDragState({ active: true, hand: 'left', element: el });
-             }
-         }
-         // Right
-         else if (data.right.isPinching) {
-             const hit = performHitTest(data.right.position.x, data.right.position.y, data.cameraAspect);
-             if (hit) {
-                 const symbol = hit.dataset.symbol;
-                 const el = ELEMENTS.find(e => e.symbol === symbol);
-                 if (el) setDragState({ active: true, hand: 'right', element: el });
-             }
-         }
-    }
-    
-    // During Drag
-    if (dragState.active) {
-        const handData = dragState.hand === 'left' ? data.left : data.right;
-        if (!handData.isPinching) {
-            // Drop detected
-            const hit = performHitTest(handData.position.x, handData.position.y, data.cameraAspect);
-            if (!hit && dragState.element) {
-                // Dropped in main area -> Equip
-                const newIndex = ELEMENTS.findIndex(e => e.symbol === dragState.element?.symbol);
-                if (newIndex !== -1) {
-                    if (dragState.hand === 'left') setLeftIndex(newIndex);
-                    else setRightIndex(newIndex);
-                    setMessage("ELEMENT EQUIPPED");
-                    setTimeout(() => setMessage("LAB READY"), 1500);
+    // 2. Pinch Selection Logic (Rising Edge Detection - Click)
+    // Only if not combined
+    if (!combinedElement && !fusionErrorRef.current) {
+        
+        // --- LEFT HAND ---
+        if (data.left.isPinching && !lastLeftPinch.current) {
+            // Rising Edge (Just Pinched)
+            const hit = performHitTest(data.left.position.x, data.left.position.y, data.cameraAspect);
+            if (hit) {
+                const symbol = hit.dataset.symbol;
+                const newIndex = ELEMENTS.findIndex(e => e.symbol === symbol);
+                if (newIndex !== -1 && newIndex !== leftIndex) {
+                    setLeftIndex(newIndex);
+                    setMessage("ELEMENT SWAPPED (LEFT)");
+                    setTimeout(() => setMessage("LAB READY"), 1000);
                 }
             }
-            setDragState({ active: false, hand: null, element: null });
         }
-        return; // EXIT HERE: Do not process claps while dragging
+        
+        // --- RIGHT HAND ---
+        if (data.right.isPinching && !lastRightPinch.current) {
+            // Rising Edge (Just Pinched)
+            const hit = performHitTest(data.right.position.x, data.right.position.y, data.cameraAspect);
+            if (hit) {
+                const symbol = hit.dataset.symbol;
+                const newIndex = ELEMENTS.findIndex(e => e.symbol === symbol);
+                if (newIndex !== -1 && newIndex !== rightIndex) {
+                    setRightIndex(newIndex);
+                    setMessage("ELEMENT SWAPPED (RIGHT)");
+                    setTimeout(() => setMessage("LAB READY"), 1000);
+                }
+            }
+        }
     }
 
-    // 3. Clap & Hold Logic (Only if not combined and not dragging)
+    // Update previous pinch states
+    lastLeftPinch.current = data.left.isPinching;
+    lastRightPinch.current = data.right.isPinching;
+
+    // 3. Clap & Hold Logic (Only if not combined)
     if (!combinedElement && data.isClapping && !fusionErrorRef.current) {
         if (clapStartRef.current === 0) {
             clapStartRef.current = now;
@@ -182,7 +176,7 @@ const App: React.FC = () => {
         if (message === "HOLD TO FUSE...") setMessage("LAB READY");
     }
 
-  }, [combinedElement, dragState, message, checkCombination]);
+  }, [combinedElement, message, checkCombination, leftIndex, rightIndex]);
 
   return (
     <div className="relative w-full h-full bg-black overflow-hidden select-none">
@@ -211,7 +205,6 @@ const App: React.FC = () => {
                 combinedElement={combinedElement}
                 message={message}
                 trackingRef={trackingDataRef}
-                dragState={dragState}
             />
         </>
       )}

@@ -20,12 +20,6 @@ export interface HandGestureState {
 
 export type Handedness = 'left' | 'right';
 
-export interface DragState {
-  active: boolean;
-  hand: Handedness | null;
-  element: ElementData | null;
-}
-
 export interface TrackingData {
   left: HandGestureState;
   right: HandGestureState;

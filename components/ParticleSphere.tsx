@@ -10,19 +10,19 @@ interface ParticleSphereProps {
   isActive: boolean;
 }
 
-const vertexShader = `
+const coreVertexShader = `
   uniform float uTime;
   uniform float uScale; // Controls the spread/radius
   uniform float uTurbulence; // Controls the chaotic movement
   
   attribute float aSize;
   attribute float aSpeed;
-  attribute vec3 aRandom;
+  attribute float aLayer; // 0 = Core, 1 = Shell
   
   varying vec3 vColor;
   varying float vAlpha;
   
-  // Simplex noise function for organic movement
+  // Simplex noise function
   vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
   vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
   vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
@@ -37,8 +37,8 @@ const vertexShader = `
     vec3 i1 = min( g.xyz, l.zxy );
     vec3 i2 = max( g.xyz, l.zxy );
     vec3 x1 = x0 - i1 + C.xxx;
-    vec3 x2 = x0 - i2 + C.yyy; // 2.0*C.x = 1/3 = C.y
-    vec3 x3 = x0 - D.yyy;      // -1.0+3.0*C.x = -0.5 = -D.y
+    vec3 x2 = x0 - i2 + C.yyy;
+    vec3 x3 = x0 - D.yyy;
     i = mod289(i);
     vec4 p = permute( permute( permute(
               i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
@@ -76,65 +76,150 @@ const vertexShader = `
   void main() {
     vec3 pos = position;
     
-    // Orbital rotation
-    float t = uTime * 0.2 * aSpeed;
-    float c = cos(t);
-    float s = sin(t);
-    mat2 rot = mat2(c, -s, s, c);
-    pos.xz = rot * pos.xz;
+    // Rotation logic specific to particles
+    float t = uTime * 0.5 * aSpeed;
     
+    // Core (Layer 0) barely moves, Shell (Layer 1) spins
+    if (aLayer > 0.5) {
+        float c = cos(t);
+        float s = sin(t);
+        mat2 rot = mat2(c, -s, s, c);
+        pos.xz = rot * pos.xz;
+    }
+
     // Noise field movement
-    float noiseVal = snoise(pos * 2.0 + uTime * 0.5);
-    pos += normal * noiseVal * (0.1 + uTurbulence * 0.2);
+    float noiseVal = snoise(pos * 2.5 + uTime * 0.8);
+    pos += normal * noiseVal * (0.05 + uTurbulence * 0.15);
 
-    // Expansion Logic:
-    // uScale 0 -> tightly packed nucleus
-    // uScale 1 -> expanded gas cloud
-    // Base radius is 1.0. 
-    float expansion = 0.5 + (uScale * 2.5); // Range 0.5 to 3.0
+    // Expansion Logic
+    float expansion = 1.0 + (uScale * 3.0); 
     
-    vec3 finalPos = pos * expansion;
+    // If it's a shell particle, push it out further
+    if (aLayer > 0.5) {
+        pos *= expansion;
+    } else {
+        // Nucleus only expands slightly
+        pos *= (1.0 + uScale * 0.5);
+    }
 
-    vec4 mvPosition = modelViewMatrix * vec4(finalPos, 1.0);
+    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     
     // Size attenuation
-    // Particles get slightly smaller when cloud expands to maintain density illusion
-    float sizeFactor = 1.0 - (uScale * 0.3);
-    gl_PointSize = (aSize * sizeFactor * 80.0) / -mvPosition.z;
+    gl_PointSize = (aSize * 50.0) / -mvPosition.z;
     
-    // Distance fade for soft edges
-    float dist = length(finalPos);
-    vAlpha = smoothstep(expansion + 1.0, expansion - 0.5, dist);
+    // Alpha
+    vAlpha = 1.0;
   }
 `;
 
-const fragmentShader = `
+const coreFragmentShader = `
   uniform vec3 uColor;
-  uniform float uOpacity; // Global opacity for fade in/out
+  uniform float uOpacity; 
   varying float vAlpha;
   
   void main() {
-    // Round particle
+    // Sharp circle with glow
     vec2 xy = gl_PointCoord.xy - vec2(0.5);
     float r = length(xy);
     if (r > 0.5) discard;
     
-    // Soft glow gradient
-    float glow = 1.0 - (r * 2.0);
-    glow = pow(glow, 1.5);
+    // Hard center, soft edge
+    float glow = 1.0 - smoothstep(0.1, 0.5, r);
     
-    // Hotter center color
-    vec3 coreColor = vec3(1.0, 1.0, 1.0);
-    vec3 finalColor = mix(uColor, coreColor, glow * 0.4);
+    vec3 finalColor = mix(uColor, vec3(1.0), glow * 0.5); // Add white hot center
     
-    gl_FragColor = vec4(finalColor, glow * vAlpha * uOpacity);
+    gl_FragColor = vec4(finalColor, glow * uOpacity);
   }
 `;
 
+// --- NEW PARTICLE RING (Orbit) ---
+const ringVertexShader = `
+    attribute float aSize;
+    attribute float aOffset;
+    uniform float uTime;
+    uniform vec3 uColor;
+    varying vec3 vColor;
+    
+    void main() {
+        vec3 pos = position;
+        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        gl_PointSize = (aSize * 30.0) / -mvPosition.z;
+    }
+`;
+
+const ringFragmentShader = `
+    uniform vec3 uColor;
+    uniform float uOpacity;
+    void main() {
+        vec2 xy = gl_PointCoord.xy - vec2(0.5);
+        if (length(xy) > 0.5) discard;
+        
+        float strength = 1.0 - length(xy) * 2.0;
+        strength = pow(strength, 1.5);
+        
+        gl_FragColor = vec4(uColor, strength * uOpacity);
+    }
+`;
+
+const OrbitalRing: React.FC<{ radius: number, speed: number, axis: [number, number, number], color: string, opacity: number }> = ({ radius, speed, axis, color, opacity }) => {
+    const ref = useRef<THREE.Points>(null);
+    const count = 150; // Number of particles in the ring
+
+    const { positions, sizes, offsets } = useMemo(() => {
+        const pos = new Float32Array(count * 3);
+        const sz = new Float32Array(count);
+        const off = new Float32Array(count);
+
+        for (let i = 0; i < count; i++) {
+            const theta = (i / count) * Math.PI * 2;
+            // Circle on XZ plane initially
+            pos[i * 3] = radius * Math.cos(theta);
+            pos[i * 3 + 1] = 0; 
+            pos[i * 3 + 2] = radius * Math.sin(theta);
+            
+            sz[i] = Math.random() * 0.5 + 0.5;
+            off[i] = Math.random() * Math.PI * 2;
+        }
+        return { positions: pos, sizes: sz, offsets: off };
+    }, [radius]);
+
+    useFrame((state) => {
+        if (ref.current) {
+            // Self Rotation Axis
+            ref.current.rotation.x += axis[0] * speed;
+            ref.current.rotation.y += axis[1] * speed;
+            ref.current.rotation.z += axis[2] * speed;
+        }
+    });
+
+    return (
+        <points ref={ref}>
+            <bufferGeometry>
+                <bufferAttribute attach="attributes-position" count={positions.length / 3} array={positions} itemSize={3} />
+                <bufferAttribute attach="attributes-aSize" count={sizes.length} array={sizes} itemSize={1} />
+                <bufferAttribute attach="attributes-aOffset" count={offsets.length} array={offsets} itemSize={1} />
+            </bufferGeometry>
+            <shaderMaterial
+                transparent
+                depthWrite={false}
+                blending={THREE.AdditiveBlending}
+                vertexShader={ringVertexShader}
+                fragmentShader={ringFragmentShader}
+                uniforms={{
+                    uColor: { value: new THREE.Color(color) },
+                    uOpacity: { value: opacity }
+                }}
+            />
+        </points>
+    );
+};
+
 const ParticleSphere: React.FC<ParticleSphereProps> = ({ element, scaleRef, opacityTarget }) => {
   const meshRef = useRef<THREE.Points>(null);
-  const count = 3000;
+  const coreCount = 800;
+  const shellCount = 1200;
   
   const uniforms = useMemo(() => ({
     uTime: { value: 0 },
@@ -142,56 +227,70 @@ const ParticleSphere: React.FC<ParticleSphereProps> = ({ element, scaleRef, opac
     uTurbulence: { value: 0.0 },
     uColor: { value: new THREE.Color(element.color) },
     uOpacity: { value: 0 }
-  }), []); // Init only
+  }), []); 
 
-  const { positions, sizes, speeds } = useMemo(() => {
-    const pos = new Float32Array(count * 3);
-    const sz = new Float32Array(count);
-    const sp = new Float32Array(count);
+  const { positions, sizes, speeds, layers } = useMemo(() => {
+    const total = coreCount + shellCount;
+    const pos = new Float32Array(total * 3);
+    const sz = new Float32Array(total);
+    const sp = new Float32Array(total);
+    const lay = new Float32Array(total);
 
-    for (let i = 0; i < count; i++) {
-      // Gaussian-ish distribution for a core-heavy cloud
-      const r = Math.pow(Math.random(), 3); // More points near center
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos((Math.random() * 2) - 1);
+    // 1. Generate Core (Dense Sphere)
+    for (let i = 0; i < coreCount; i++) {
+        const r = Math.pow(Math.random(), 3) * 0.6; // Compact
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos((Math.random() * 2) - 1);
 
-      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-      pos[i * 3 + 2] = r * Math.cos(phi);
+        pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        pos[i * 3 + 2] = r * Math.cos(phi);
 
-      sz[i] = Math.random() * 0.5 + 0.5;
-      sp[i] = Math.random() + 0.2;
+        sz[i] = Math.random() * 1.5 + 0.5;
+        sp[i] = Math.random() * 0.2;
+        lay[i] = 0.0; // Core Layer
     }
-    return { positions: pos, sizes: sz, speeds: sp };
+
+    // 2. Generate Shell (Hollow Sphere surface)
+    for (let i = coreCount; i < total; i++) {
+        const r = 1.2 + Math.random() * 0.2; // Fixed radius shell
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos((Math.random() * 2) - 1);
+
+        pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        pos[i * 3 + 2] = r * Math.cos(phi);
+
+        sz[i] = Math.random() * 0.8 + 0.2;
+        sp[i] = Math.random() + 0.5;
+        lay[i] = 1.0; // Shell Layer
+    }
+
+    return { positions: pos, sizes: sz, speeds: sp, layers: lay };
   }, []);
 
   useFrame((state) => {
     const time = state.clock.getElapsedTime();
-    const pinchValue = scaleRef.current; // 0 to 1
+    const pinchValue = scaleRef.current; 
 
     if (meshRef.current) {
       const material = meshRef.current.material as THREE.ShaderMaterial;
       material.uniforms.uTime.value = time;
       
-      // Smoothly update scale (Cloud Expansion)
-      // Lerp current value towards pinch value
       material.uniforms.uScale.value = THREE.MathUtils.lerp(
         material.uniforms.uScale.value,
         pinchValue,
         0.1
       );
 
-      // Turbulence increases with expansion
       material.uniforms.uTurbulence.value = THREE.MathUtils.lerp(
         material.uniforms.uTurbulence.value,
         pinchValue,
         0.1
       );
 
-      // Color transition
-      material.uniforms.uColor.value.lerp(new THREE.Color(element.color), 0.05);
-
-      // Opacity fade logic (for fusion transition)
+      material.uniforms.uColor.value.lerp(new THREE.Color(element.color), 0.1);
+      
       material.uniforms.uOpacity.value = THREE.MathUtils.lerp(
         material.uniforms.uOpacity.value,
         opacityTarget,
@@ -201,21 +300,34 @@ const ParticleSphere: React.FC<ParticleSphereProps> = ({ element, scaleRef, opac
   });
 
   return (
-    <points ref={meshRef}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" count={positions.length / 3} array={positions} itemSize={3} />
-        <bufferAttribute attach="attributes-aSize" count={sizes.length} array={sizes} itemSize={1} />
-        <bufferAttribute attach="attributes-aSpeed" count={speeds.length} array={speeds} itemSize={1} />
-      </bufferGeometry>
-      <shaderMaterial
-        transparent
-        depthWrite={false}
-        blending={THREE.AdditiveBlending}
-        vertexShader={vertexShader}
-        fragmentShader={fragmentShader}
-        uniforms={uniforms}
-      />
-    </points>
+    <group>
+        {/* Core & Shell Particles */}
+        <points ref={meshRef}>
+            <bufferGeometry>
+                <bufferAttribute attach="attributes-position" count={positions.length / 3} array={positions} itemSize={3} />
+                <bufferAttribute attach="attributes-aSize" count={sizes.length} array={sizes} itemSize={1} />
+                <bufferAttribute attach="attributes-aSpeed" count={speeds.length} array={speeds} itemSize={1} />
+                <bufferAttribute attach="attributes-aLayer" count={layers.length} array={layers} itemSize={1} />
+            </bufferGeometry>
+            <shaderMaterial
+                transparent
+                depthWrite={false}
+                blending={THREE.AdditiveBlending}
+                vertexShader={coreVertexShader}
+                fragmentShader={coreFragmentShader}
+                uniforms={uniforms}
+            />
+        </points>
+
+        {/* Futuristic Orbital Particle Rings */}
+        {opacityTarget > 0.1 && (
+            <>
+                <OrbitalRing radius={2.0} speed={0.03} axis={[0.2, 1, 0.2]} color={element.color} opacity={opacityTarget * 0.8} />
+                <OrbitalRing radius={2.4} speed={0.04} axis={[1, 0.2, 0.2]} color={element.color} opacity={opacityTarget * 0.7} />
+                <OrbitalRing radius={2.8} speed={0.02} axis={[0.5, 0.5, 1]} color="#ffffff" opacity={opacityTarget * 0.5} />
+            </>
+        )}
+    </group>
   );
 };
 

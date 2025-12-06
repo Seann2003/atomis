@@ -110,8 +110,11 @@ export function detectPalmUp(landmarks: NormalizedLandmark[]): boolean {
 export class AlternatingMotionBuffer {
     leftHistory: { y: number; time: number }[] = [];
     rightHistory: { y: number; time: number }[] = [];
+    lastLeftY: number | null = null;
+    lastRightY: number | null = null;
     pattern: 'up' | 'down' | null = null; // Current expected pattern
     patternCount: number = 0; // Count of pattern repetitions
+    minMovementThreshold = 0.05; // Minimum movement required to count as alternation (5% of screen)
     
     addLeftPoint(y: number) {
         const now = Date.now();
@@ -126,34 +129,55 @@ export class AlternatingMotionBuffer {
     }
     
     detectAlternatingPattern(leftPalmUp: boolean, rightPalmUp: boolean, leftY: number, rightY: number): boolean {
-        // Both palms must be facing up initially
+        // Both palms must be facing up
         if (!leftPalmUp || !rightPalmUp) {
             this.reset();
+            return false;
+        }
+        
+        // Check if there's actual movement (not just static position)
+        const leftMoved = this.lastLeftY !== null && Math.abs(leftY - this.lastLeftY) > this.minMovementThreshold;
+        const rightMoved = this.lastRightY !== null && Math.abs(rightY - this.lastRightY) > this.minMovementThreshold;
+        
+        // Need movement to detect pattern
+        if (!leftMoved && !rightMoved) {
+            this.lastLeftY = leftY;
+            this.lastRightY = rightY;
             return false;
         }
         
         // Calculate relative positions
         const leftHigher = leftY < rightY; // Lower y = higher on screen
         const rightHigher = rightY < leftY;
+        const heightDiff = Math.abs(leftY - rightY);
         
-        // Detect pattern: one up, one down, alternating
-        if (this.pattern === null) {
-            // Start pattern detection
-            if (leftHigher) {
-                this.pattern = 'up';
-                this.patternCount = 1;
-            } else if (rightHigher) {
-                this.pattern = 'down';
-                this.patternCount = 1;
-            }
+        // Need significant height difference to count as alternation
+        if (heightDiff < this.minMovementThreshold) {
+            this.lastLeftY = leftY;
+            this.lastRightY = rightY;
             return false;
         }
         
-        // Check for pattern change (alternation)
-        if (this.pattern === 'up' && rightHigher) {
+        // Detect pattern: one up, one down, alternating
+        if (this.pattern === null) {
+            // Start pattern detection only if there's clear difference
+            if (leftHigher && heightDiff > this.minMovementThreshold) {
+                this.pattern = 'up';
+                this.patternCount = 1;
+            } else if (rightHigher && heightDiff > this.minMovementThreshold) {
+                this.pattern = 'down';
+                this.patternCount = 1;
+            }
+            this.lastLeftY = leftY;
+            this.lastRightY = rightY;
+            return false;
+        }
+        
+        // Check for pattern change (alternation) - must have actual movement
+        if (this.pattern === 'up' && rightHigher && heightDiff > this.minMovementThreshold) {
             this.pattern = 'down';
             this.patternCount++;
-        } else if (this.pattern === 'down' && leftHigher) {
+        } else if (this.pattern === 'down' && leftHigher && heightDiff > this.minMovementThreshold) {
             this.pattern = 'up';
             this.patternCount++;
         }
@@ -164,6 +188,8 @@ export class AlternatingMotionBuffer {
             return true;
         }
         
+        this.lastLeftY = leftY;
+        this.lastRightY = rightY;
         return false;
     }
     
@@ -172,6 +198,8 @@ export class AlternatingMotionBuffer {
         this.patternCount = 0;
         this.leftHistory = [];
         this.rightHistory = [];
+        this.lastLeftY = null;
+        this.lastRightY = null;
     }
 }
 

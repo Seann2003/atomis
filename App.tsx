@@ -456,6 +456,8 @@ const App: React.FC = () => {
     const now = Date.now();
     
     // Handle 67 gesture detection - Easter egg: unlock Holmium
+    // COMMENTED OUT - Disabled gesture detection
+    /*
     if (data.isSixtySevenGesture && !sixtySevenGestureProcessedRef.current) {
       sixtySevenGestureProcessedRef.current = true;
       setShowSixtySeven(true);
@@ -489,6 +491,7 @@ const App: React.FC = () => {
       // Reset flag when gesture is no longer detected
       sixtySevenGestureProcessedRef.current = false;
     }
+    */
     
     if (gameState === 'dead') return;
 

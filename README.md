@@ -1,4 +1,6 @@
-# Atomis — The J.A.R.V.I.S of Chemistry
+# 2nd Place in Cursor x Anthropic Hackathon Malaysia
+
+<h2>Atomis — The J.A.R.V.I.S of Chemistry</h2>
 
 Atomis is an interactive chemistry exploration platform that transforms the way students learn chemistry. Instead of relying on traditional methods such as flashcards, lectures, and static quizzes, Atomis introduces an immersive 3D environment where users can manipulate elements, fuse compounds, and engage with a chemistry-focused AI assistant.
 
